@@ -9,7 +9,7 @@ To cacluate the hash code, run the following command.
 
 ## Hardhat commands
 
-You can get started at hardhat by following [HardHat Docs](https://hardhat.org/getting-started/), following are some of the useful commands that you can use
+You can get started with hardhat by following [HardHat Docs](https://hardhat.org/getting-started/), following are some of the useful commands that you can use
 
 - Run tests
     > npx hardhat test
