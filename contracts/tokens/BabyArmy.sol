@@ -573,196 +573,105 @@ interface IUniswapV2Router02 is IUniswapV2Router01 {
     ) external payable;
 }
 
-pragma solidity ^0.6.0;
-
-abstract contract ReentrancyGuard {
-    uint256 private constant _NOT_ENTERED = 1;
-    uint256 private constant _ENTERED = 2;
-
-    uint256 private _status;
-
-    constructor() public {
-        _status = _NOT_ENTERED;
-    }
-
-    modifier nonReentrant() {
-        require(_status != _ENTERED, 'ReentrancyGuard: reentrant call');
-        _status = _ENTERED;
-        _;
-        _status = _NOT_ENTERED;
-    }
-
-    modifier isHuman() {
-        require(tx.origin == msg.sender, 'sorry humans only');
-        _;
-    }
-}
-
-pragma solidity ^0.6.0;
-
-library TransferHelper {
-    function safeApprove(
-        address token,
-        address to,
-        uint256 value
-    ) internal {
-        // bytes4(keccak256(bytes('approve(address,uint256)')));
-        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(0x095ea7b3, to, value));
-        require(
-            success && (data.length == 0 || abi.decode(data, (bool))),
-            'TransferHelper::safeApprove: approve failed'
-        );
-    }
-
-    function safeTransfer(
-        address token,
-        address to,
-        uint256 value
-    ) internal {
-        // bytes4(keccak256(bytes('transfer(address,uint256)')));
-        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(0xa9059cbb, to, value));
-        require(
-            success && (data.length == 0 || abi.decode(data, (bool))),
-            'TransferHelper::safeTransfer: transfer failed'
-        );
-    }
-
-    function safeTransferFrom(
-        address token,
-        address from,
-        address to,
-        uint256 value
-    ) internal {
-        // bytes4(keccak256(bytes('transferFrom(address,address,uint256)')));
-        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(0x23b872dd, from, to, value));
-        require(
-            success && (data.length == 0 || abi.decode(data, (bool))),
-            'TransferHelper::transferFrom: transferFrom failed'
-        );
-    }
-
-    function safeTransferETH(address to, uint256 value) internal {
-        (bool success, ) = to.call{value: value}(new bytes(0));
-        require(success, 'TransferHelper::safeTransferETH: ETH transfer failed');
-    }
-}
-
-contract Wallet {
-    receive() external payable {}
-}
-
-contract GoldenKittyCake is Context, IERC20, Ownable, ReentrancyGuard {
+contract BabyArmy is Context, IERC20, Ownable {
     using SafeMath for uint256;
     using Address for address;
-    using TransferHelper for address;
 
-    string private _name = 'GoldenKittyCake';
-    string private _symbol = 'GKCAKE';
-    uint8 private _decimals = 9;
+    string private _name = 'BabyArmy';
+    string private _symbol = 'BARMY';
+    uint8 private _decimals = 18;
 
     mapping(address => uint256) internal _reflectionBalance;
     mapping(address => uint256) internal _tokenBalance;
     mapping(address => mapping(address => uint256)) internal _allowances;
 
     uint256 private constant MAX = ~uint256(0);
-    uint256 internal _tokenTotal = 1_000_000_000_000e9;
+    uint256 internal _tokenTotal = 1_000_000_000_000_000e18;
     uint256 internal _reflectionTotal = (MAX - (MAX % _tokenTotal));
 
-    mapping(address => bool) isTaxless;
+    mapping(address => bool) public whitelist;
     mapping(address => bool) internal _isExcluded;
-    address[] internal _excluded;
-
-    uint256 public rewardCycleInterval;
-    uint256 public threshHoldTopUpRate = 2; // 2 percent
-    mapping(address => uint256) public nextAvailableClaimDate;
-    uint256 public rewardThreshold = 1 ether;
+    address[] public _excluded;
 
     uint256 public _feeDecimal = 2;
-    // index 0 = buy fee, index 1 = sell fee, index 2 = p2p fee
     uint256[] public _taxFee;
     uint256[] public _liqFee;
-    uint256[] public _insuranceFee;
+    uint256[] public _charityFee;
     uint256[] public _marketingFee;
+    uint256[] public _burnFee;
 
     uint256 public _taxFeeTotal;
-    uint256 public _liquidityFeeTotal;
+    uint256 public _liqFeeTotal;
+    uint256 public _charityFeeTotal;
     uint256 public _marketingFeeTotal;
-    uint256 public _insuranceFeeTotal;
+    uint256 public _burnFeeTotal;
+
+    address public charityWallet;
+    address public marketingWallet;
 
     bool public isFeeActive = false; // should be true
-    bool private inSwapAndLiquify;
+    bool private inSwap;
     bool public swapEnabled = true;
 
-    uint256 public maxTxAmount = _tokenTotal.mul(5).div(1000); // 0.5%
-    uint256 public minTokensBeforeSwap = 1_000_000e9;
-
-    address public marketingWallet;
-    address public insuranceWallet;
-    address public tokenPool;
-
-    address public cake;
+    uint256 public maxTxAmount = _tokenTotal; // no limit
+    uint256 public minTokensBeforeSwap = 1_000_000_000e18;
 
     IUniswapV2Router02 public router;
     address public pair;
 
-    event SwapUpdated(bool enabled);
-    event SwapAndLiquify(uint256 tokensSwapped, uint256 bnbReceived, uint256 tokensIntoLiqudity);
-    event SwapGCakeForCake(uint256 tokensSwapped,uint256 cakeReceived);
-    event SwapGCakeToBnbForMarketingWallet(uint256 tokensSwapped,uint256 bnbReceived);
-    event SwapGCakeToBnbForInsuranceWallet(uint256 tokensSwapped,uint256 bnbReceived);
-    event ClaimCakeSuccessfully(address indexed recipient, uint256 cakeReceived, uint256 nextAvailableClaimDate, uint256 timestamp);
+    event SwapEnabledUpdated(bool enabled);
+    event SwapTokenToBnbForMarketingWallet(uint256 tokensSwapped, uint256 bnbReceived);
+    event SwapTokenToBnbForCharityWallet(uint256 tokensSwapped, uint256 bnbReceived);
+    event SwapAndLiquify(uint256 tokensSwapped, uint256 ethReceived, uint256 tokensIntoLiqudity);
 
     modifier lockTheSwap() {
-        inSwapAndLiquify = true;
+        inSwap = true;
         _;
-        inSwapAndLiquify = false;
+        inSwap = false;
     }
 
-    constructor(address _cake, address _router,uint interval,address _owner,address _marketingWallet, address _insuranceWallet) public {
-        rewardCycleInterval = interval;
+    constructor(
+        address _router,
+        address _owner,
+        address marketing,
+        address charity
+    ) public {
         IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(_router);
         pair = IUniswapV2Factory(_uniswapV2Router.factory()).createPair(address(this), _uniswapV2Router.WETH());
         router = _uniswapV2Router;
 
-        // exlcude pair address from tax rewards
-        _isExcluded[address(pair)] = true;
-        _excluded.push(address(pair));
+        whitelist[_owner] = true;
+        whitelist[address(this)] = true;
 
-        // address _owner = 0xD40CB4B51830250bfF24dd4403e14F11600C197A;
-        cake = _cake;//0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82;
-        marketingWallet = _marketingWallet;//0x4d50DA60fE164904074A78C82F6024548342b1dC;
-        insuranceWallet = _insuranceWallet;//0xc499a2E63d38dE517789037e25D69e4Fbbc55eF3;
-        tokenPool = address(new Wallet());
-
+        marketingWallet = marketing;
+        charityWallet = charity;
 
         // exlcude pair address from tax rewards
         _isExcluded[address(pair)] = true;
         _excluded.push(address(pair));
 
-        isTaxless[_owner] = true;
-        isTaxless[tokenPool] = true;
-        isTaxless[insuranceWallet] = true;
-        isTaxless[marketingWallet] = true;
-        isTaxless[address(this)] = true;
-
-        _reflectionBalance[_owner] = _reflectionTotal;
-        emit Transfer(address(0),_owner, _tokenTotal);
-
-        _taxFee.push(400);
-        _taxFee.push(700);
+        _taxFee.push(200);
+        _taxFee.push(200);
         _taxFee.push(1000);
 
-        _liqFee.push(100);
+        _liqFee.push(200);
         _liqFee.push(200);
         _liqFee.push(0);
 
-        _insuranceFee.push(100);
-        _insuranceFee.push(200);
-        _insuranceFee.push(0);
+        _charityFee.push(100);
+        _charityFee.push(200);
+        _charityFee.push(0);
 
-        _marketingFee.push(100);
+        _marketingFee.push(300);
         _marketingFee.push(500);
         _marketingFee.push(0);
+
+        _burnFee.push(0);
+        _burnFee.push(200);
+        _burnFee.push(0);
+
+        _reflectionBalance[_owner] = _reflectionTotal;
+        emit Transfer(address(0), _owner, _tokenTotal);
 
         transferOwnership(_owner);
     }
@@ -847,7 +756,7 @@ contract GoldenKittyCake is Context, IERC20, Ownable, ReentrancyGuard {
     }
 
     function excludeAccount(address account) external onlyOwner {
-        require(account != address(router), 'ERC20: We can not exclude Uniswap router.');
+        require(account != address(router), 'ERC20: We can not exclude router.');
         require(!_isExcluded[account], 'ERC20: Account is already excluded');
         if (_reflectionBalance[account] > 0) {
             _tokenBalance[account] = tokenFromReflection(_reflectionBalance[account]);
@@ -890,18 +799,16 @@ contract GoldenKittyCake is Context, IERC20, Ownable, ReentrancyGuard {
         require(recipient != address(0), 'ERC20: transfer to the zero address');
         require(amount > 0, 'Transfer amount must be greater than zero');
 
-        require(isTaxless[sender] || isTaxless[recipient] || amount <= maxTxAmount, 'Max Transfer Limit Exceeds!');
+        require(amount <= maxTxAmount, 'Transfer Limit Exceeds');
 
-        if (swapEnabled && !inSwapAndLiquify && sender != pair) {
+        if (swapEnabled && !inSwap && sender != pair) {
             swap();
         }
-
-        topUpClaimCycleAfterTransfer(sender, recipient, amount);
 
         uint256 transferAmount = amount;
         uint256 rate = _getReflectionRate();
 
-        if (isFeeActive && !isTaxless[_msgSender()] && !isTaxless[recipient] && !inSwapAndLiquify) {
+        if (isFeeActive && !whitelist[sender] && !whitelist[recipient] && !inSwap) {
             transferAmount = collectFee(sender, amount, rate, recipient == pair, sender != pair && recipient != pair);
         }
 
@@ -931,14 +838,10 @@ contract GoldenKittyCake is Context, IERC20, Ownable, ReentrancyGuard {
 
         //@dev tax fee
         uint256 taxFee = amount.mul(p2p ? _taxFee[2] : sell ? _taxFee[1] : _taxFee[0]).div(10**(_feeDecimal + 2));
-        if(taxFee != 0) {
+        if (taxFee != 0) {
             transferAmount = transferAmount.sub(taxFee);
-            _reflectionBalance[tokenPool] = _reflectionBalance[tokenPool].add(taxFee.mul(rate));
-            if (_isExcluded[tokenPool]) {
-                _tokenBalance[tokenPool] = _tokenBalance[tokenPool].add(taxFee);
-            }
+            _reflectionTotal = _reflectionTotal.sub(taxFee.mul(rate));
             _taxFeeTotal = _taxFeeTotal.add(taxFee);
-            emit Transfer(account, tokenPool, taxFee);
         }
 
         //@dev liquidity fee
@@ -949,12 +852,14 @@ contract GoldenKittyCake is Context, IERC20, Ownable, ReentrancyGuard {
             if (_isExcluded[address(this)]) {
                 _tokenBalance[address(this)] = _tokenBalance[address(this)].add(liqFee);
             }
-            _liquidityFeeTotal = _liquidityFeeTotal.add(liqFee);
+            _liqFeeTotal = _liqFeeTotal.add(liqFee);
             emit Transfer(account, address(this), liqFee);
         }
 
         //@dev marketing fee
-        uint256 marketingFee = amount.mul(p2p ? _marketingFee[2] : sell ? _marketingFee[1] : _marketingFee[0]).div(10**(_feeDecimal + 2));
+        uint256 marketingFee = amount.mul(p2p ? _marketingFee[2] : sell ? _marketingFee[1] : _marketingFee[0]).div(
+            10**(_feeDecimal + 2)
+        );
         if (marketingFee != 0) {
             transferAmount = transferAmount.sub(marketingFee);
             _reflectionBalance[marketingWallet] = _reflectionBalance[marketingWallet].add(marketingFee.mul(rate));
@@ -965,100 +870,74 @@ contract GoldenKittyCake is Context, IERC20, Ownable, ReentrancyGuard {
             emit Transfer(account, marketingWallet, marketingFee);
         }
 
-        //@dev insurance fee
-        uint256 insuranceFee = amount.mul(p2p ? _insuranceFee[2] : sell ? _insuranceFee[1] : _insuranceFee[0]).div(10**(_feeDecimal + 2));
-        if (insuranceFee != 0) {
-            transferAmount = transferAmount.sub(insuranceFee);
-            _reflectionBalance[insuranceWallet] = _reflectionBalance[insuranceWallet].add(insuranceFee.mul(rate));
-            if (_isExcluded[insuranceWallet]) {
-                _tokenBalance[insuranceWallet] = _tokenBalance[insuranceWallet].add(insuranceFee);
+        //@dev charity fee
+        uint256 charityFee = amount.mul(p2p ? _charityFee[2] : sell ? _charityFee[1] : _charityFee[0]).div(
+            10**(_feeDecimal + 2)
+        );
+        if (charityFee != 0) {
+            transferAmount = transferAmount.sub(charityFee);
+            _reflectionBalance[charityWallet] = _reflectionBalance[charityWallet].add(charityFee.mul(rate));
+            if (_isExcluded[charityWallet]) {
+                _tokenBalance[charityWallet] = _tokenBalance[charityWallet].add(charityFee);
             }
-            _insuranceFeeTotal = _insuranceFeeTotal.add(insuranceFee);
-            emit Transfer(account, insuranceWallet, insuranceFee);
+            _charityFeeTotal = _charityFeeTotal.add(charityFee);
+            emit Transfer(account, charityWallet, charityFee);
+        }
+
+        //@dev burn fee
+        uint256 burnFee = amount.mul(p2p ? _burnFee[2] : sell ? _burnFee[1] : _burnFee[0]).div(10**(_feeDecimal + 2));
+        if (burnFee != 0) {
+            transferAmount = transferAmount.sub(burnFee);
+            _tokenTotal = _tokenTotal.sub(burnFee);
+            _reflectionTotal = _reflectionTotal.sub(burnFee.mul(rate));
+            _burnFeeTotal = _burnFeeTotal.add(burnFee);
+            emit Transfer(account, address(0), burnFee);
         }
 
         return transferAmount;
     }
 
-    function calculateReward(address account) public view returns (uint256) {
-        uint256 _totalSupply = totalSupply()
-        .sub(balanceOf(marketingWallet))
-        .sub(balanceOf(insuranceWallet))
-        .sub(balanceOf(tokenPool))
-        .sub(balanceOf(address(0)))
-        .sub(balanceOf(0x000000000000000000000000000000000000dEaD)) // exclude burned wallet
-        .sub(balanceOf(address(pair))); // exclude liquidity wallet
+    function swap() private lockTheSwap {
+        uint256 liqBalance = balanceOf(address(this));
+        uint256 marketingWalletBalance = balanceOf(marketingWallet);
+        uint256 charityWalletBalance = balanceOf(charityWallet);
+        uint256 rate = _getReflectionRate();
 
-        uint256 currentBalance = balanceOf(address(account));
-        uint256 pool = IERC20(cake).balanceOf(address(this));
-
-        // now calculate reward
-        uint256 reward = pool.mul(currentBalance).div(_totalSupply);
-
-        return reward;
-    }
-
-    function claimReward(bool swap) public isHuman nonReentrant lockTheSwap {
-        require(nextAvailableClaimDate[msg.sender] <= block.timestamp, 'Error: Reward Claim unavailable!');
-        require(balanceOf(msg.sender) >= 0, 'Error: Must be a holder to claim  rewards!');
-
-        uint256 poolTokenBalance = balanceOf(tokenPool);
-        if (swap && poolTokenBalance > 1 ether) {
-            uint256 rate = _getReflectionRate();
-            _reflectionBalance[tokenPool] = _reflectionBalance[tokenPool].sub(poolTokenBalance.mul(rate));
-            _reflectionBalance[address(this)] = _reflectionBalance[address(this)].add(poolTokenBalance.mul(rate));
-            if (_isExcluded[address(this)]) {
-                _tokenBalance[address(this)] = _tokenBalance[address(this)].add(poolTokenBalance);
-            }
-            if (_isExcluded[tokenPool]) {
-                _tokenBalance[tokenPool] = _tokenBalance[tokenPool].sub(poolTokenBalance);
-            }
-            swapTokensForCake(poolTokenBalance);
-        }
-
-        uint256 reward = calculateReward(msg.sender);
-
-        // update rewardCycleBlock
-        nextAvailableClaimDate[msg.sender] = block.timestamp + rewardCycleInterval;
-        cake.safeTransfer(msg.sender, reward);
-
-        emit ClaimCakeSuccessfully(msg.sender, reward, nextAvailableClaimDate[msg.sender], block.timestamp);
-    }
-
-    function topUpClaimCycleAfterTransfer(
-        address sender,
-        address recipient,
-        uint256 amount
-    ) private {
-        uint256 currentSenderBalance = balanceOf(sender);
-        uint256 currentRecipientBalance = balanceOf(recipient);
-
-        if (recipient == pair && currentSenderBalance == amount) {
-            // initate claim date when sell entire token
-            nextAvailableClaimDate[sender] = 0;
+        if (liqBalance >= minTokensBeforeSwap) {
+            swapAndLiquify(liqBalance);
         } else {
-            nextAvailableClaimDate[recipient] =
-                nextAvailableClaimDate[recipient] +
-                calculateTopUpClaim(currentRecipientBalance, amount);
-        }
-    }
-
-    function calculateTopUpClaim(uint256 currentRecipientBalance, uint256 amount) public view returns (uint256) {
-        if (currentRecipientBalance == 0) {
-            return block.timestamp + rewardCycleInterval;
-        } else {
-            uint256 rate = amount.mul(100).div(currentRecipientBalance);
-
-            if (uint256(rate) >= threshHoldTopUpRate) {
-                uint256 incurCycleBlock = rewardCycleInterval.mul(uint256(rate)).div(100);
-
-                if (incurCycleBlock >= rewardCycleInterval) {
-                    incurCycleBlock = rewardCycleInterval;
+            if (charityWalletBalance > 0) {
+                _reflectionBalance[charityWallet] = _reflectionBalance[charityWallet].sub(
+                    charityWalletBalance.mul(rate)
+                );
+                _reflectionBalance[address(this)] = _reflectionBalance[address(this)].add(
+                    charityWalletBalance.mul(rate)
+                );
+                if (_isExcluded[address(this)]) {
+                    _tokenBalance[address(this)] = _tokenBalance[address(this)].add(charityWalletBalance);
                 }
-
-                return incurCycleBlock;
+                if (_isExcluded[charityWallet]) {
+                    _tokenBalance[charityWallet] = _tokenBalance[charityWallet].sub(charityWalletBalance);
+                }
+                uint256 swapedEth = swapTokensForEth(charityWalletBalance, charityWallet);
+                emit SwapTokenToBnbForCharityWallet(charityWalletBalance, swapedEth);
             }
-            return 0;
+            if (marketingWalletBalance > 0) {
+                _reflectionBalance[marketingWallet] = _reflectionBalance[marketingWallet].sub(
+                    marketingWalletBalance.mul(rate)
+                );
+                _reflectionBalance[address(this)] = _reflectionBalance[address(this)].add(
+                    marketingWalletBalance.mul(rate)
+                );
+                if (_isExcluded[address(this)]) {
+                    _tokenBalance[address(this)] = _tokenBalance[address(this)].add(marketingWalletBalance);
+                }
+                if (_isExcluded[marketingWallet]) {
+                    _tokenBalance[marketingWallet] = _tokenBalance[marketingWallet].sub(marketingWalletBalance);
+                }
+                uint256 swapedEth = swapTokensForEth(marketingWalletBalance, marketingWallet);
+                emit SwapTokenToBnbForMarketingWallet(marketingWalletBalance, swapedEth);
+            }
         }
     }
 
@@ -1075,58 +954,7 @@ contract GoldenKittyCake is Context, IERC20, Ownable, ReentrancyGuard {
         return reflectionSupply.div(tokenSupply);
     }
 
-    function swap() private lockTheSwap {
-        uint256 marketingWalletBalance = balanceOf(marketingWallet);
-        uint256 cakeBankBalance = balanceOf(insuranceWallet);
-        uint256 poolTokenBalance = balanceOf(tokenPool);
-        uint256 liquidityTokenBalance = balanceOf(address(this));
-        uint256 rate = _getReflectionRate();
-
-        if (liquidityTokenBalance >= minTokensBeforeSwap) {
-            swapAndLiquify(liquidityTokenBalance);
-        } else if (poolTokenBalance > minTokensBeforeSwap) {
-            _reflectionBalance[tokenPool] = _reflectionBalance[tokenPool].sub(poolTokenBalance.mul(rate));
-            _reflectionBalance[address(this)] = _reflectionBalance[address(this)].add(poolTokenBalance.mul(rate));
-            if (_isExcluded[address(this)]) {
-                _tokenBalance[address(this)] = _tokenBalance[address(this)].add(poolTokenBalance);
-            }
-            if (_isExcluded[tokenPool]) {
-                _tokenBalance[tokenPool] = _tokenBalance[tokenPool].sub(poolTokenBalance);
-            }
-            swapTokensForCake(poolTokenBalance);
-        } else {
-            if (cakeBankBalance > 0) {
-                _reflectionBalance[insuranceWallet] = _reflectionBalance[insuranceWallet].sub(cakeBankBalance.mul(rate));
-                _reflectionBalance[address(this)] = _reflectionBalance[address(this)].add(cakeBankBalance.mul(rate));
-                if (_isExcluded[address(this)]) {
-                    _tokenBalance[address(this)] = _tokenBalance[address(this)].add(cakeBankBalance);
-                }
-                if (_isExcluded[insuranceWallet]) {
-                    _tokenBalance[insuranceWallet] = _tokenBalance[insuranceWallet].sub(cakeBankBalance);
-                }
-                uint256 swapedEth = swapTokensForEth(cakeBankBalance, insuranceWallet);
-                emit SwapGCakeToBnbForInsuranceWallet(cakeBankBalance, swapedEth);
-            }
-            if (marketingWalletBalance > 0) {
-                _reflectionBalance[marketingWallet] = _reflectionBalance[marketingWallet].sub(
-                    marketingWalletBalance.mul(rate)
-                );
-                _reflectionBalance[address(this)] = _reflectionBalance[address(this)].add(
-                    marketingWalletBalance.mul(rate)
-                );
-                if (_isExcluded[address(this)]) {
-                    _tokenBalance[address(this)] = _tokenBalance[address(this)].add(marketingWalletBalance);
-                }
-                if (_isExcluded[insuranceWallet]) {
-                    _tokenBalance[marketingWallet] = _tokenBalance[marketingWallet].sub(marketingWalletBalance);
-                }
-                uint256 swapedEth = swapTokensForEth(marketingWalletBalance, marketingWallet);
-                emit SwapGCakeToBnbForMarketingWallet(marketingWalletBalance, swapedEth);
-            }
-        }
-    }
-
-    function swapAndLiquify(uint256 contractTokenBalance) private {
+    function swapAndLiquify(uint256 contractTokenBalance) private lockTheSwap {
         if (contractTokenBalance > maxTxAmount) {
             contractTokenBalance = maxTxAmount;
         }
@@ -1152,37 +980,14 @@ contract GoldenKittyCake is Context, IERC20, Ownable, ReentrancyGuard {
         emit SwapAndLiquify(half, newBalance, otherHalf);
     }
 
-    function swapTokensForCake(uint256 tokenAmount) private {
-        // generate the pair path of token -> wbnb -> cake
-        address[] memory path = new address[](3);
-        path[0] = address(this);
-        path[1] = router.WETH();
-        path[2] = address(cake);
-
-        _approve(address(this), address(router), tokenAmount);
-
-        uint256 beforeBalance = IERC20(cake).balanceOf(address(this));
-        // make the swap
-        router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
-            tokenAmount,
-            0, // accept any amount of cake
-            path,
-            address(this),
-            block.timestamp
-        );
-        uint256 afterBalanace = IERC20(cake).balanceOf(address(this));
-
-        emit SwapGCakeForCake(tokenAmount, afterBalanace.sub(beforeBalance));
-    }
-
-    function swapTokensForEth(uint256 tokenAmount, address recipient) private returns(uint256) {
+    function swapTokensForEth(uint256 tokenAmount, address recipient) private returns (uint256) {
         // generate the uniswap pair path of token -> weth
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = router.WETH();
 
         _approve(address(this), address(router), tokenAmount);
-        
+
         uint256 beforeBalance = recipient.balance;
         // make the swap
         router.swapExactTokensForETHSupportingFeeOnTransferTokens(
@@ -1194,19 +999,6 @@ contract GoldenKittyCake is Context, IERC20, Ownable, ReentrancyGuard {
         );
         uint256 afterBalance = recipient.balance;
         return afterBalance.sub(beforeBalance);
-    }
-
-    function swapEthForTokens(address to) private {
-        address[] memory path = new address[](2);
-        path[0] = router.WETH();
-        path[1] = address(this);
-
-        router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: address(this).balance}(
-            0,
-            path,
-            to,
-            block.timestamp
-        );
     }
 
     function addLiquidity(uint256 tokenAmount, uint256 ethAmount) private {
@@ -1224,55 +1016,80 @@ contract GoldenKittyCake is Context, IERC20, Ownable, ReentrancyGuard {
         );
     }
 
-    function setPairRouterCake(address _pair, IUniswapV2Router02 _router, address _cake) external onlyOwner {
+    function setPairAndRouter(address _pair, IUniswapV2Router02 _router) external onlyOwner {
         pair = _pair;
         router = _router;
-        cake = _cake;
     }
 
-    function setTaxless(address account, bool value) external onlyOwner {
-        isTaxless[account] = value;
+    function setWhitelist(address account, bool value) external onlyOwner {
+        whitelist[account] = value;
     }
 
     function setSwapEnabled(bool enabled) external onlyOwner {
         swapEnabled = enabled;
-        SwapUpdated(enabled);
+        SwapEnabledUpdated(enabled);
     }
 
     function setFeeActive(bool value) external onlyOwner {
         isFeeActive = value;
     }
 
-    function setTaxFee(uint256 buy, uint256 sell, uint256 p2p) external onlyOwner {
+    function setTaxFee(
+        uint256 buy,
+        uint256 sell,
+        uint256 p2p
+    ) external onlyOwner {
         _taxFee[0] = buy;
         _taxFee[1] = sell;
         _taxFee[2] = p2p;
     }
 
-    function setInsuranceFee(uint256 buy, uint256 sell, uint256 p2p) external onlyOwner {
-        _insuranceFee[0] = buy;
-        _insuranceFee[1] = sell;
-        _insuranceFee[2] = p2p;
+    function setCharityFee(
+        uint256 buy,
+        uint256 sell,
+        uint256 p2p
+    ) external onlyOwner {
+        _charityFee[0] = buy;
+        _charityFee[1] = sell;
+        _charityFee[2] = p2p;
     }
 
-    function setMarketingFee(uint256 buy, uint256 sell, uint256 p2p) external onlyOwner {
+    function setMarketingFee(
+        uint256 buy,
+        uint256 sell,
+        uint256 p2p
+    ) external onlyOwner {
         _marketingFee[0] = buy;
         _marketingFee[1] = sell;
         _marketingFee[2] = p2p;
     }
 
-    function setLiquidityFee(uint256 buy, uint256 sell, uint256 p2p) external onlyOwner {
+    function setLiquidityFee(
+        uint256 buy,
+        uint256 sell,
+        uint256 p2p
+    ) external onlyOwner {
         _liqFee[0] = buy;
         _liqFee[1] = sell;
         _liqFee[2] = p2p;
+    }
+
+    function setBurnFee(
+        uint256 buy,
+        uint256 sell,
+        uint256 p2p
+    ) external onlyOwner {
+        _burnFee[0] = buy;
+        _burnFee[1] = sell;
+        _burnFee[2] = p2p;
     }
 
     function setMarketingWallet(address wallet) external onlyOwner {
         marketingWallet = wallet;
     }
 
-    function setInsuranceWallet(address bank)  external onlyOwner {
-        insuranceWallet = bank;
+    function setCharityWallet(address bank) external onlyOwner {
+        charityWallet = bank;
     }
 
     function setMaxTxAmount(uint256 amount) external onlyOwner {
@@ -1281,10 +1098,6 @@ contract GoldenKittyCake is Context, IERC20, Ownable, ReentrancyGuard {
 
     function setMinTokensBeforeSwap(uint256 amount) external onlyOwner {
         minTokensBeforeSwap = amount;
-    }
-
-    function setRewardCycleInterval(uint256 interval) external onlyOwner {
-        rewardCycleInterval = interval;
     }
 
     receive() external payable {}

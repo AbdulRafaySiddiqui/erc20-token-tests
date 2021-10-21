@@ -15,6 +15,14 @@ const sleep = async (s) => {
   }
 }
 
+const ROUTERS = {
+  PANCAKE: '0x10ED43C718714eb63d5aA57B78B54704E256024E',
+  PANCAKE_TESTNET: '0x9Ac64Cc6e4415144C455BD8E4837Fea55603e5c3',
+  UNISWAP: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',
+  SUSHISWAP_TESTNET: '0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506',
+  PANGALIN: '0xE54Ca86531e17Ef3616d22Ca28b0D458b6C89106'
+}
+
 async function main() {
   //Deploy contracts
   const [deployer] = await ethers.getSigners()

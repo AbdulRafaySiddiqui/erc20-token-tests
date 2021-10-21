@@ -23,7 +23,7 @@ let feeTo
 
 describe('Swap', () => {
   it('It should deploy exchange and token', async () => {
-    ;[deployer, feeTo, user] = await ethers.getSigners()
+    [deployer, feeTo, owner, user] = await ethers.getSigners()
 
     const wethContract = await ethers.getContractFactory('WBNB')
     weth = await wethContract.deploy()
@@ -34,20 +34,20 @@ describe('Swap', () => {
     const routerContract = await ethers.getContractFactory('CaramelSwapRouter')
     router = await routerContract.deploy(factory.address, weth.address)
 
-    const tokenContract = await ethers.getContractFactory('OneDoge')
-    token = await tokenContract.deploy(router.address)
+    const tokenContract = await ethers.getContractFactory('Token')
+    token = await tokenContract.deploy(router.address, owner.address)
   })
 
   it('It should Add liquidity', async () => {
-    await token.approve(router.address, MAX_UINT)
-    await router.addLiquidityETH(token.address, ONE_ETH, 0, 0, deployer.address, '100000000000000000', {
+    await token.connect(owner).approve(router.address, MAX_UINT)
+    await router.connect(owner).addLiquidityETH(token.address, ONE_ETH, 0, 0, owner.address, '100000000000000000', {
       value: ONE_ETH,
     })
   })
 
   it('It Should Buy Tokens from deployer account', async () => {
     buyPath = [weth.address, token.address]
-    await router.swapExactETHForTokensSupportingFeeOnTransferTokens(0, buyPath, deployer.address, '1000000000000000', {
+    await router.connect(owner).swapExactETHForTokensSupportingFeeOnTransferTokens(0, buyPath, deployer.address, '1000000000000000', {
       value: LESS_ETH,
     })
   })
@@ -74,7 +74,6 @@ describe('Swap', () => {
   })
 
   it('It should buy tokens from user account', async () => {
-    await token.launch()
     await expect(
       router
         .connect(user)

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-
+// @dev TG: defi_guru
 pragma solidity ^0.6.0;
 
 abstract contract Context {
@@ -235,8 +235,7 @@ contract ERC20 is Context, IERC20 {
 pragma solidity ^0.6.0;
 
 contract TOKEN is ERC20, Ownable {
-    constructor(string memory name, string memory symbol) public 
-    ERC20(name,symbol) {
-        _mint(_msgSender(),100_000e18);
+    constructor(string memory name, string memory symbol, address owner) public ERC20(name, symbol) {
+        _mint(owner,100_000e18);
     }
 }
