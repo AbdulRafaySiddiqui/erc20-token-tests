@@ -25,12 +25,9 @@ const sleep = async (s) => {
 }
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
-
-let owner = '0xAceF70308b4d7b6F79fAE717C308aCcf7bF39455';
+let owner = '0x168EEf81238A161f84018132B2B5C1Ec949d8a67';
 let marketing = '0x35A31911211Fa4805B5602B2Ed06154686d45FC7';
-let charity = '0x2A1a09a5695071dec39ADBe099aDA7d0e7F2f4e6';
-const rewardToken = { address: '0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47' }
-const pinkAntiBot = '0x8EFDb3b642eb2a20607ffe0A56CFefF6a95Df002';
+let reward = '0x2A1a09a5695071dec39ADBe099aDA7d0e7F2f4e6';
 
 async function main() {
     //Deploy contracts
@@ -40,26 +37,15 @@ async function main() {
     // const router = ROUTERS.PANCAKE;
     // const rewardInterval = 86400;
 
-    // const tokenContract = await ethers.getContractFactory('MiniFlokiAda')
-    // const token = await tokenContract.deploy(rewardToken.address, ZERO_ADDRESS, router, rewardInterval, owner, marketing, charity, pinkAntiBot)
+    // const tokenContract = await ethers.getContractFactory('CryptoRunner')
+    // const token = await tokenContract.deploy(ROUTERS.PANCAKE, owner, marketing, reward)
     // console.log('Token: ', token.address)
 
-    const rewardClaimContract = await ethers.getContractFactory('TopHolderRewardClaim')
-    const rewardClam = await rewardClaimContract.deploy(rewardToken.address)
-    console.log('Reward Claim: ', rewardClam.address)
+    // await sleep(10)
 
-    await rewardClam.grandRewardSignerRole('0xb8d683Af99a82B0f52f72EB765eB81529C5B35cf')
-    // await token.setTopHolderRewardDistributor(rewardClam.address)
-
-    await sleep(10)
-
-    // await hre.run('verify:verify', {
-    //     address: token.address,
-    //     constructorArguments: [rewardToken.address, ZERO_ADDRESS, router, rewardInterval, owner, marketing, charity, pinkAntiBot],
-    // })
     await hre.run('verify:verify', {
-        address: rewardClam.address,
-        constructorArguments: [rewardToken.address],
+        address: '0x0D262D6e2986B0DE80762912086F4AcdD09c85a7',
+        constructorArguments: [ROUTERS.PANCAKE, owner, marketing, reward],
     })
 
 }

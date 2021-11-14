@@ -26,40 +26,28 @@ const sleep = async (s) => {
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 
-let owner = '0xAceF70308b4d7b6F79fAE717C308aCcf7bF39455';
-let marketing = '0x35A31911211Fa4805B5602B2Ed06154686d45FC7';
-let charity = '0x2A1a09a5695071dec39ADBe099aDA7d0e7F2f4e6';
-const rewardToken = { address: '0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47' }
+const owner = '0xc7Ef2b32351aaB9466F93c48d0D1D68130B64cc9';
+const marketing = '0x3f7c59A940A761fE8670dE1721B815968E256110';
+const development = '0xBBeAe0597155f1117206Ad22309D14768740fdD3';
 const pinkAntiBot = '0x8EFDb3b642eb2a20607ffe0A56CFefF6a95Df002';
+const minifloki = '0x48CbC7f87C657fEA3B297F658a5133a5deeF9b04'
 
 async function main() {
     //Deploy contracts
     const [deployer] = await ethers.getSigners()
-    // owner = deployer.address;
 
-    // const router = ROUTERS.PANCAKE;
-    // const rewardInterval = 86400;
+    const router = ROUTERS.PANCAKE;
 
-    // const tokenContract = await ethers.getContractFactory('MiniFlokiAda')
-    // const token = await tokenContract.deploy(rewardToken.address, ZERO_ADDRESS, router, rewardInterval, owner, marketing, charity, pinkAntiBot)
+    // const tokenContract = await ethers.getContractFactory('MiniSportZilla')
+    // const token = await tokenContract.deploy(router, owner, marketing, development, pinkAntiBot, minifloki)
     // console.log('Token: ', token.address)
 
-    const rewardClaimContract = await ethers.getContractFactory('TopHolderRewardClaim')
-    const rewardClam = await rewardClaimContract.deploy(rewardToken.address)
-    console.log('Reward Claim: ', rewardClam.address)
 
-    await rewardClam.grandRewardSignerRole('0xb8d683Af99a82B0f52f72EB765eB81529C5B35cf')
-    // await token.setTopHolderRewardDistributor(rewardClam.address)
+    // await sleep(20)
 
-    await sleep(10)
-
-    // await hre.run('verify:verify', {
-    //     address: token.address,
-    //     constructorArguments: [rewardToken.address, ZERO_ADDRESS, router, rewardInterval, owner, marketing, charity, pinkAntiBot],
-    // })
     await hre.run('verify:verify', {
-        address: rewardClam.address,
-        constructorArguments: [rewardToken.address],
+        address: '0xd506EE6A2bb483a953EB311e9b7E5719211702D3',
+        constructorArguments: [router, owner, marketing, development, pinkAntiBot, minifloki],
     })
 
 }

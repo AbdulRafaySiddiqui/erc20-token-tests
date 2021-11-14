@@ -32,25 +32,25 @@ let owner
 
 describe('Token Test', () => {
     it('It should deploy exchange and token', async () => {
-        [deployer, owner, feeTo, user, user2, marketingWallet] = await ethers.getSigners()
+        [owner, deployer, feeTo, user, user2, marketingWallet] = await ethers.getSigners()
 
         const wethContract = await ethers.getContractFactory('WBNB')
-        weth = await wethContract.deploy()
+        weth = await wethContract.connect(deployer).deploy()
 
         const factoryContract = await ethers.getContractFactory('CaramelSwapFactory')
-        factory = await factoryContract.deploy(feeTo.address)
+        factory = await factoryContract.connect(deployer).deploy(feeTo.address)
 
         const routerContract = await ethers.getContractFactory('CaramelSwapRouter')
-        router = await routerContract.deploy(factory.address, weth.address)
+        router = await routerContract.connect(deployer).deploy(factory.address, weth.address)
 
         const rewardContract = await ethers.getContractFactory('TOKEN');
-        rewardToken1 = await rewardContract.deploy('R1', 'r1', deployer.address);
+        rewardToken1 = await rewardContract.connect(deployer).deploy('R1', 'r1', deployer.address);
 
         const reward2Contract = await ethers.getContractFactory('TOKEN');
-        rewardToken2 = await reward2Contract.deploy('R2', 'r2', deployer.address);
+        rewardToken2 = await reward2Contract.connect(deployer).deploy('R2', 'r2', deployer.address);
 
         const tokenContract = await ethers.getContractFactory('TEST')
-        token = await tokenContract.deploy(router.address, rewardToken1.address, 0, 0, 0, marketingWallet.address, owner.address)
+        token = await tokenContract.connect(deployer).deploy(router.address, rewardToken1.address, 0, 0, 0, marketingWallet.address, owner.address)
 
         const distributorAddress = await token.distributor();
         distributor = new ethers.Contract(distributorAddress, abi, deployer);

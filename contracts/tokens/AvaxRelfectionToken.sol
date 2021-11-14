@@ -430,7 +430,7 @@ contract ART is IBEP20, Auth {
     // constructor (address _router, address _owner, IBEP20 _rewardToken, address _marketingToken,  address _marketingWallet, uint256 _mintPeriod, uint256 _minDistribution, uint256 _minTokenBeforeDistribution) {
     constructor () {
         address _owner = msg.sender;
-        address _router = 0xE54Ca86531e17Ef3616d22Ca28b0D458b6C89106;
+        address _router = 0xF491e7B69E4244ad4002BC14e878a34207E38c29;
         IBEP20 _rewardToken = IBEP20(0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7);
         address _marketingToken = 0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664;
         marketingWallet = msg.sender;

@@ -42,6 +42,7 @@ const signReward = async (users = []) => {
         const message = {
             user: e.account,
             amount: e.rewards,
+            nonce: nonces[e.account],
             deadline: deadline,
         }
 
