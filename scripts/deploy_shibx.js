@@ -25,28 +25,33 @@ const sleep = async (s) => {
 }
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
-
-const owner = '0xc7Ef2b32351aaB9466F93c48d0D1D68130B64cc9';
-const marketing = '0x3f7c59A940A761fE8670dE1721B815968E256110';
-const development = '0xBBeAe0597155f1117206Ad22309D14768740fdD3';
-const pinkAntiBot = '0x8EFDb3b642eb2a20607ffe0A56CFefF6a95Df002';
-const minifloki = '0x48CbC7f87C657fEA3B297F658a5133a5deeF9b04'
+let owner = '0xb35869eCfB96c27493cA281133edd911e479d0D9';
+let marketing = '0xe234Adb58788EE9F02fCA8B5DB6593a26ab4FF47';
+let vault = '0x66E5c73F9c0197b18C0876f2e132b164ebC4BBBb';
+let buyback = "0xd4cB36600D87929Ca154de6cD08a8aaC061cCe1a";
 
 async function main() {
     //Deploy contracts
     const [deployer] = await ethers.getSigners()
+    // owner = deployer.address;
 
-    const router = ROUTERS.UNISWAP;
+    const router = ROUTERS.PANCAKE;
 
-    // const tokenContract = await ethers.getContractFactory('MiniSportZilla')
-    // const token = await tokenContract.deploy(router, owner, marketing, development)
-    // console.log('Token: ', token.address)
+    const tokenContract = await ethers.getContractFactory('ShibaGalaxy')
+    const token = await tokenContract.deploy(router, owner, marketing, vault, buyback)
+    console.log('Token: ', token.address)
 
-    // await sleep(20)
+    const feeReceiver = await token.feeReceiver()
+    await sleep(100)
 
     await hre.run('verify:verify', {
-        address: '0x1fCcc8BA1394504f06B6A7EB419f0BE08777f7B0',
-        constructorArguments: [router, owner, marketing, development],
+        address: token.address,
+        constructorArguments: [router, owner, marketing, vault, buyback],
+    })
+
+    await hre.run('verify:verify', {
+        address: feeReceiver,
+        constructorArguments: [owner, vault],
     })
 
 }

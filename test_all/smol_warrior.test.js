@@ -1,7 +1,7 @@
 const { ethers } = require('hardhat')
 const { expect, use } = require('chai')
 const { solidity } = require('ethereum-waffle')
-const { BigNumber, utils, provider } = ethers
+const { BigNumber, utils } = ethers
 
 use(solidity)
 
@@ -12,14 +12,12 @@ const ONE_ETH = utils.parseUnits('1', 5)
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 const MAX_UINT = '115792089237316195423570985008687907853269984665640564039457584007913129639935'
 
-const vault = '0x4d50DA60fE164904074A78C82F6024548342b1dC'
-const marketing = '0xc499a2E63d38dE517789037e25D69e4Fbbc55eF3'
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-describe('CryptoRunner Test', () => {
+describe('IslandInu Test', () => {
     let weth, token, cake, factory, router, buyPath, sellPath, deployer, feeTo, user1, user2
 
     it('It should deploy exchange and token', async () => {
@@ -34,13 +32,23 @@ describe('CryptoRunner Test', () => {
         const routerContract = await ethers.getContractFactory('CaramelSwapRouter')
         router = await routerContract.deploy(factory.address, weth.address)
 
-        const tokenContract = await ethers.getContractFactory('CryptoRunner')
-        token = await tokenContract.deploy(router.address, deployer.address, marketing, vault)
+        const cakeContract = await ethers.getContractFactory('TOKEN')
+        cake = await cakeContract.deploy('Cake', 'CAKE', deployer.address)
+
+        const tokenContract = await ethers.getContractFactory('SmolWarrior')
+        token = await tokenContract.deploy(router.address)
     })
 
-    it('It should Add IslandInu liquidity', async () => {
+    it('It should Add Smol Warrior liquidity', async () => {
         await token.approve(router.address, MAX_UINT)
         await router.addLiquidityETH(token.address, await token.totalSupply(), 0, 0, deployer.address, '100000000000000000', {
+            value: ONE_K_ETH,
+        })
+    })
+
+    it('It should Add CAKE liquidity', async () => {
+        await cake.approve(router.address, MAX_UINT)
+        await router.addLiquidityETH(cake.address, await cake.totalSupply(), 0, 0, deployer.address, '100000000000000000', {
             value: ONE_K_ETH,
         })
     })
@@ -94,16 +102,12 @@ describe('CryptoRunner Test', () => {
         sellPath = [token.address, weth.address]
         const balance = await token.balanceOf(user1.address)
         await token.connect(user1).approve(router.address, MAX_UINT)
-        await
-            expect(
-                router
-                    .connect(user1)
-                    .swapExactTokensForETHSupportingFeeOnTransferTokens(balance.div(100), 0, sellPath, user1.address, '1000000000000000')
-            ).to.emit(token, 'AutoLiquify')
+
+        await expect(
+            router
+                .connect(user1)
+                .swapExactTokensForETHSupportingFeeOnTransferTokens(balance.div(100), 0, sellPath, user1.address, '1000000000000000')
+        ).to.emit(token, 'Swap')
     })
 
-    it('It should have increased the vault bnb', async () => {
-        const balance = await provider.getBalance(vault)
-        expect(balance).to.be.gt(0)
-    })
 })

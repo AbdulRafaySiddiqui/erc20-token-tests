@@ -662,13 +662,13 @@ interface ITopHolderRewardDistributor {
     function onTransfer(address sender, address recipient, uint256 amount) external;
 }
 
-contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
+contract RewardToken is Context, IERC20, Ownable, ReentrancyGuard {
     using SafeMath for uint256;
     using Address for address;
     using TransferHelper for address;
 
-    string private _name = 'MiniFlokiADA';
-    string private _symbol = 'MFLOKIADA';
+    string private _name = 'TestX';
+    string private _symbol = '$TST';
     uint8 private _decimals = 9;
 
     mapping(address => uint256) internal _reflectionBalance;

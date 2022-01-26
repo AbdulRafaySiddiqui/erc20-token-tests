@@ -25,28 +25,34 @@ const sleep = async (s) => {
 }
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
-let owner = '0x168EEf81238A161f84018132B2B5C1Ec949d8a67';
-let marketing = '0x35A31911211Fa4805B5602B2Ed06154686d45FC7';
-let reward = '0x2A1a09a5695071dec39ADBe099aDA7d0e7F2f4e6';
+let owner = '0xb35869eCfB96c27493cA281133edd911e479d0D9';
+let marketing = '0xe234Adb58788EE9F02fCA8B5DB6593a26ab4FF47';
+let vault = '0x66E5c73F9c0197b18C0876f2e132b164ebC4BBBb';
+let buyback = "0x2A1a09a5695071dec39ADBe099aDA7d0e7F2f4e6";
 
 async function main() {
     //Deploy contracts
     const [deployer] = await ethers.getSigners()
     // owner = deployer.address;
 
-    // const router = ROUTERS.PANCAKE;
-    // const rewardInterval = 86400;
+    const router = ROUTERS.PANCAKE;
 
-    // const tokenContract = await ethers.getContractFactory('CryptoRunner')
-    // const token = await tokenContract.deploy(ROUTERS.PANCAKE, owner, marketing, reward)
+    // const tokenContract = await ethers.getContractFactory('TESTX')
+    // const token = await tokenContract.deploy(router, owner, marketing, vault, buyback)
     // console.log('Token: ', token.address)
 
+    // const feeReceiver = await token.feeReceiver()
     // await sleep(10)
 
     await hre.run('verify:verify', {
-        address: '0x0D262D6e2986B0DE80762912086F4AcdD09c85a7',
-        constructorArguments: [ROUTERS.PANCAKE, owner, marketing, reward],
+        address: '0xA52ec757A737D37E5c8b42f1eACC129D9C81FDbd',
+        constructorArguments: [router, owner, marketing, vault, buyback],
     })
+
+    // await hre.run('verify:verify', {
+    //     address: feeReceiver.address,
+    //     constructorArguments: [owner, vault],
+    // })
 
 }
 

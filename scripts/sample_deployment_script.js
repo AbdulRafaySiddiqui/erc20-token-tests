@@ -24,6 +24,8 @@ const ROUTERS = {
   FANTOM: '0xF491e7B69E4244ad4002BC14e878a34207E38c29'
 }
 
+const LIQUIDITy_RESTRICTOR = '0xeD1261C063563Ff916d7b1689Ac7Ef68177867F2'
+
 async function main() {
   //Deploy contracts
   // const [deployer] = await ethers.getSigners()

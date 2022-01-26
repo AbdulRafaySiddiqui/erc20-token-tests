@@ -657,18 +657,13 @@ interface IPinkAntiBot {
   ) external;
 }
 
-interface ITopHolderRewardDistributor {
-    function depositReward(uint256 amount) external;
-    function onTransfer(address sender, address recipient, uint256 amount) external;
-}
-
-contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
+contract MiniSportZilla is Context, IERC20, Ownable, ReentrancyGuard {
     using SafeMath for uint256;
     using Address for address;
     using TransferHelper for address;
 
-    string private _name = 'MiniFlokiADA';
-    string private _symbol = 'MFLOKIADA';
+    string private _name = 'MiniSportZilla';
+    string private _symbol = 'MINISPORTZ';
     uint8 private _decimals = 9;
 
     mapping(address => uint256) internal _reflectionBalance;
@@ -683,26 +678,19 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
     mapping(address => bool) internal _isExcluded;
     address[] internal _excluded;
 
-    uint256 public rewardCycleInterval;
-    uint256 public threshHoldTopUpRate = 2; // 2 percent
-    mapping(address => uint256) public nextAvailableClaimDate;
-    uint256 public rewardThreshold = 1 ether;
-
     uint256 public _feeDecimal = 2;
     // index 0 = buy fee, index 1 = sell fee, index 2 = p2p fee
     uint256[] public _taxFee;
-    uint256[] public _rewardFee;
-    uint256[] public _topHolderFee;
+    uint256[] public _developmentFee;
     uint256[] public _liqFee;
-    uint256[] public _charityFee;
+    uint256[] public _miniFlokiLiqFee;
     uint256[] public _marketingFee;
 
     uint256 internal _feeTotal;
-    uint256 internal _rewardFeeCollected;
-    uint256 internal _topHolderFeeCollected;
+    uint256 internal _developmentFeeCollected;
     uint256 internal _liqFeeCollected;
+    uint256 internal _miniFlokiLiqFeeCollected;
     uint256 internal _marketingFeeCollected;
-    uint256 internal _charityFeeCollected;
 
     bool public isFeeActive = false; // should be true
     bool private inSwap;
@@ -711,12 +699,9 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
     uint256 public maxTxAmount = _tokenTotal.mul(5).div(1000); // 0.5%
     uint256 public minTokensBeforeSwap = 1_000_000e9;
 
+    address public miniFloki;
     address public marketingWallet;
-    address public charityWallet;
-    ITopHolderRewardDistributor public topHolderRewarDistributor;
-
-    address public rewardToken;
-    mapping(address => uint256) public lastbuy;
+    address public developmentWallet;
 
     IUniswapV2Router02 public router;
     address public pair;
@@ -725,8 +710,7 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
 
     event SwapUpdated(bool enabled);
     event Swap(uint256 tokensSwapped, uint256 bnbReceived, uint256 tokensIntoLiqudity);
-    event AutoLiquify(uint256 bnbAmount, uint256 tokenAmount);
-    event RewardClaimedSuccessfully(address indexed recipient, uint256 reward, uint256 nextAvailableClaimDate, uint256 timestamp);
+    event AutoLiquify(address indexed token, uint256 bnbAmount, uint256 tokenAmount);
 
     modifier lockTheSwap() {
         inSwap = true;
@@ -734,54 +718,47 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
         inSwap = false;
     }
 
-    constructor(address _rewardToken, ITopHolderRewardDistributor _topHolderRewarDistributor, address _router,uint interval,address _owner,address _marketingWallet, address _charityWallet) public {
-        rewardCycleInterval = interval;
+    constructor(address _router ,address _owner,address _marketingWallet, address _developmentWallet) public {
         IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(_router);
         pair = IUniswapV2Factory(_uniswapV2Router.factory()).createPair(address(this), _uniswapV2Router.WETH());
         router = _uniswapV2Router;
-        rewardToken = _rewardToken;
         marketingWallet = _marketingWallet;
-        charityWallet = _charityWallet;
-        topHolderRewarDistributor = _topHolderRewarDistributor;
+        developmentWallet = _developmentWallet;
 
         isTaxless[_owner] = true;
-        isTaxless[charityWallet] = true;
+        isTaxless[developmentWallet] = true;
         isTaxless[marketingWallet] = true;
         isTaxless[address(this)] = true;
 
         excludeAccount(address(pair));
         excludeAccount(address(this));
         excludeAccount(address(marketingWallet));
-        excludeAccount(address(charityWallet));
+        excludeAccount(address(developmentWallet));
         excludeAccount(address(address(0)));
         excludeAccount(address(address(0x000000000000000000000000000000000000dEaD)));
 
         _reflectionBalance[_owner] = _reflectionTotal;
-        emit Transfer(address(0),_owner, _tokenTotal);
+        emit Transfer(address(0), _owner, _tokenTotal);
 
         _taxFee.push(300);
-        _taxFee.push(400);
+        _taxFee.push(350);
         _taxFee.push(0);
 
         _liqFee.push(200);
-        _liqFee.push(300);
+        _liqFee.push(200);
         _liqFee.push(0);
 
-        _charityFee.push(100);
-        _charityFee.push(100);
-        _charityFee.push(0);
+        _miniFlokiLiqFee.push(0);
+        _miniFlokiLiqFee.push(0);
+        _miniFlokiLiqFee.push(0);
 
-        _marketingFee.push(200);
+        _developmentFee.push(0);
+        _developmentFee.push(150);
+        _developmentFee.push(0);
+
+        _marketingFee.push(100);
         _marketingFee.push(400);
         _marketingFee.push(0);
-
-        _rewardFee.push(0);
-        _rewardFee.push(0);
-        _rewardFee.push(0);
-
-        _topHolderFee.push(0);
-        _topHolderFee.push(0);
-        _topHolderFee.push(0);
 
         transferOwnership(_owner);
     }
@@ -919,8 +896,6 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
             swap();
         }
 
-        topUpClaimCycleAfterTransfer(sender, recipient, amount);
-
         uint256 transferAmount = amount;
         uint256 rate = _getReflectionRate();
 
@@ -940,28 +915,21 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
             _tokenBalance[recipient] = _tokenBalance[recipient].add(transferAmount);
         }
 
-        if(sender == pair) lastbuy[recipient] = block.timestamp;
-        if(address(topHolderRewarDistributor) != address(0)){
-            topHolderRewarDistributor.onTransfer(sender, recipient, amount);
-        }
-
         emit Transfer(sender, recipient, transferAmount);
     }
 
     function calculateFee(uint256 feeIndex, uint256 amount) internal returns(uint256, uint256) {
         uint256 taxFee = amount.mul(_taxFee[feeIndex]).div(10**(_feeDecimal + 2));
         uint256 liqFee = amount.mul(_liqFee[feeIndex]).div(10**(_feeDecimal + 2));
+        uint256 minFlokiLiqFee = amount.mul(_miniFlokiLiqFee[feeIndex]).div(10**(_feeDecimal + 2));
         uint256 marketingFee = amount.mul(_marketingFee[feeIndex]).div(10**(_feeDecimal + 2));
-        uint256 charityFee = amount.mul(_charityFee[feeIndex]).div(10**(_feeDecimal + 2));
-        uint256 rewardFee = amount.mul(_rewardFee[feeIndex]).div(10**(_feeDecimal + 2));
-        uint256 topHolderFee = amount.mul(_topHolderFee[feeIndex]).div(10**(_feeDecimal + 2));
+        uint256 developmentFee = amount.mul(_developmentFee[feeIndex]).div(10**(_feeDecimal + 2));
         
         _liqFeeCollected = _liqFeeCollected.add(liqFee);
+        _miniFlokiLiqFeeCollected = _miniFlokiLiqFeeCollected.add(minFlokiLiqFee);
         _marketingFeeCollected = _marketingFeeCollected.add(marketingFee);
-        _charityFeeCollected = _charityFeeCollected.add(charityFee);
-        _rewardFeeCollected = _rewardFeeCollected.add(rewardFee);
-        _topHolderFeeCollected = _topHolderFeeCollected.add(topHolderFee);
-        return (taxFee, liqFee.add(marketingFee).add(charityFee).add(rewardFee).add(topHolderFee));
+        _developmentFeeCollected = _developmentFeeCollected.add(developmentFee);
+        return (taxFee, liqFee.add(minFlokiLiqFee).add(marketingFee).add(developmentFee));
     }
 
     function collectFee(
@@ -991,11 +959,7 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
     }
 
     function swap() private lockTheSwap {
-        uint256 totalFee = _topHolderFeeCollected
-        .add(_liqFeeCollected)
-        .add(_charityFeeCollected)
-        .add(_marketingFeeCollected)
-        .add(_rewardFeeCollected);
+        uint256 totalFee = _liqFeeCollected.add(_miniFlokiLiqFeeCollected).add(_developmentFeeCollected).add(_marketingFeeCollected);
 
         if(minTokensBeforeSwap > totalFee) return;
 
@@ -1009,6 +973,7 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
         uint256 balanceBefore = address(this).balance;
 
         _approve(address(this), address(router), totalFee);
+
         router.swapExactTokensForETHSupportingFeeOnTransferTokens(
             amountToSwap,
             0,
@@ -1023,55 +988,62 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
         
         uint256 amountBNBLiquidity = amountBNB.mul(_liqFeeCollected).div(totalBNBFee).div(2);
         uint256 amountBNBMarketing = amountBNB.mul(_marketingFeeCollected).div(totalBNBFee);
-        uint256 amountBNBCharity = amountBNB.mul(_charityFeeCollected).div(totalBNBFee);
-        uint256 amountBNBReward = amountBNB.mul(_rewardFeeCollected).div(totalBNBFee);
-        uint256 amountBNBTopHolder = amountBNB.mul(_topHolderFeeCollected).div(totalBNBFee);
+        uint256 amountBNBDevelopment = amountBNB.mul(_developmentFeeCollected).div(totalBNBFee);
+        uint256 miniFlokiAmountToLiquify = amountBNB.mul(_miniFlokiLiqFeeCollected).div(totalBNBFee);
 
+        if(amountBNBDevelopment > 0) payable(developmentWallet).transfer(amountBNBDevelopment);
         if(amountBNBMarketing > 0) payable(marketingWallet).transfer(amountBNBMarketing);
-        if(amountBNBCharity > 0) payable(charityWallet).transfer(amountBNBCharity);
 
-        if(amountToLiquify > 0) {
-            router.addLiquidityETH{value: amountBNBLiquidity}(
+        addLiquidity(amountToLiquify, amountBNBLiquidity, miniFlokiAmountToLiquify);
+
+        _liqFeeCollected = 0;
+        _miniFlokiLiqFeeCollected = 0;
+        _marketingFeeCollected = 0;
+        _developmentFeeCollected = 0;
+
+        emit Swap(amountToSwap, amountBNB, amountToLiquify);
+    }
+
+    function addLiquidity(uint256 tokenAmountToLiquify, uint256 bnbAmountToLiquify, uint256 miniFlokiAmountToLiquify) private {
+        if(tokenAmountToLiquify > 0) {
+            router.addLiquidityETH{value: bnbAmountToLiquify}(
                 address(this),
-                amountToLiquify,
+                tokenAmountToLiquify,
                 0,
                 0,
                 owner(),
                 block.timestamp
             );
-            emit AutoLiquify(amountBNBLiquidity, amountToLiquify);
+            emit AutoLiquify(address(this), bnbAmountToLiquify, tokenAmountToLiquify);
         }
-
-        swapRewardToken(amountBNBTopHolder.add(amountBNBReward));
-        
-        _liqFeeCollected = 0;
-        _marketingFeeCollected = 0;
-        _charityFeeCollected = 0;
-        _rewardFeeCollected = 0;
-        _topHolderFeeCollected = 0;
-    }
-
-    function swapRewardToken(uint256 rewardAmount) internal {
-        if(rewardAmount > 0) {
+        if(miniFlokiAmountToLiquify > 0 && address(miniFloki) != address(0)) {
+            uint256 bnbToAdd = miniFlokiAmountToLiquify.div(2);
+            uint256 bnbToSwap = miniFlokiAmountToLiquify.sub(bnbToAdd);
+            
+            // buy some miniFloki first
             address[] memory buyPath = new address[](2);
             buyPath[0] = router.WETH();
-            buyPath[1] = rewardToken;
+            buyPath[1] = miniFloki;       
 
-            uint256 rewardBalanceBefore = IERC20(rewardToken).balanceOf(address(this));
-            router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: rewardAmount}(
+            router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: bnbToSwap}(
                 0,
                 buyPath,
                 address(this),
                 block.timestamp
             );
-            uint256 rewardBalance = IERC20(rewardToken).balanceOf(address(this)).sub(rewardBalanceBefore);
-            uint256 totalFee = _rewardFeeCollected.add(_topHolderFeeCollected);
-            uint256 topHolderRewards = rewardBalance.mul(_topHolderFeeCollected).div(totalFee);
 
-            if(address(topHolderRewarDistributor) != address(0)){
-                IERC20(rewardToken).approve(address(topHolderRewarDistributor), uint256(-1));
-                topHolderRewarDistributor.depositReward(topHolderRewards);
-            }
+            // now add liquidity
+            uint256 miniFlokiBalance = IERC20(miniFloki).balanceOf(address(this));
+            IERC20(miniFloki).approve(address(router), miniFlokiBalance);
+            router.addLiquidityETH{value: bnbToAdd}(
+                miniFloki,
+                miniFlokiBalance,
+                0,
+                0,
+                owner(),
+                block.timestamp
+            );
+            emit AutoLiquify(miniFloki, miniFlokiBalance, miniFlokiBalance);
         }
     }
 
@@ -1081,50 +1053,6 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
             excludedAmount = excludedAmount.add(balanceOf(_excluded[i]));
         }
         return totalSupply().sub(excludedAmount);
-    }
-
-    function calculateReward(address account) public view returns (uint256) {
-        uint256 excludedAmount;
-        for (uint256 i = 0; i < _excluded.length; i++) {
-            excludedAmount = excludedAmount.add(balanceOf(_excluded[i]));
-        }
-        uint256 _totalSupply = totalSupply().sub(excludedAmount);
-
-        uint256 currentBalance = balanceOf(address(account));
-        uint256 pool = IERC20(rewardToken).balanceOf(address(this));
-
-        // now calculate reward
-        uint256 reward = pool.mul(currentBalance).div(_totalSupply);
-
-        return reward;
-    }
-
-    function claimReward() public isHuman nonReentrant lockTheSwap {
-        require(nextAvailableClaimDate[msg.sender] <= block.timestamp, 'Error: Reward Claim unavailable!');
-        require(balanceOf(msg.sender) >= 0, 'Error: Must be a holder to claim  rewards!');
-
-        uint256 reward = calculateReward(msg.sender);
-
-        // update rewardCycleBlock
-        nextAvailableClaimDate[msg.sender] = block.timestamp + rewardCycleInterval;
-        rewardToken.safeTransfer(msg.sender, reward);
-
-        emit RewardClaimedSuccessfully(msg.sender, reward, nextAvailableClaimDate[msg.sender], block.timestamp);
-    }
-
-    function topUpClaimCycleAfterTransfer(
-        address sender,
-        address recipient,
-        uint256 amount
-    ) private {
-        uint256 currentSenderBalance = balanceOf(sender);
-
-        if (recipient == pair && currentSenderBalance == amount) {
-            // initate claim date when sell entire token
-            nextAvailableClaimDate[sender] = 0;
-        } else {
-            nextAvailableClaimDate[recipient] = block.timestamp + rewardCycleInterval;
-        }
     }
 
     function _getReflectionRate() private view returns (uint256) {
@@ -1140,10 +1068,9 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
         return reflectionSupply.div(tokenSupply);
     }
 
-    function setPairRouterRewardToken(address _pair, IUniswapV2Router02 _router, address _rewardToken) external onlyOwner {
+    function setPairRouterRewardToken(address _pair, IUniswapV2Router02 _router) external onlyOwner {
         pair = _pair;
         router = _router;
-        rewardToken = _rewardToken;
     }
 
     function setTaxless(address account, bool value) external onlyOwner {
@@ -1159,32 +1086,16 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
         isFeeActive = value;
     }
 
-    function setTopHolderRewardDistributor(ITopHolderRewardDistributor distributor) external onlyOwner {
-        topHolderRewarDistributor = distributor;
-    }
-
     function setTaxFee(uint256 buy, uint256 sell, uint256 p2p) external onlyOwner {
         _taxFee[0] = buy;
         _taxFee[1] = sell;
         _taxFee[2] = p2p;
     }
 
-    function setNormalRewardFee(uint256 buy, uint256 sell, uint256 p2p) external onlyOwner {
-        _rewardFee[0] = buy;
-        _rewardFee[1] = sell;
-        _rewardFee[2] = p2p;
-    }
-
-    function setTopHolderRewardFee(uint256 buy, uint256 sell, uint256 p2p) external onlyOwner {
-        _topHolderFee[0] = buy;
-        _topHolderFee[1] = sell;
-        _topHolderFee[2] = p2p;
-    }
-
-    function setChairtyFee(uint256 buy, uint256 sell, uint256 p2p) external onlyOwner {
-        _charityFee[0] = buy;
-        _charityFee[1] = sell;
-        _charityFee[2] = p2p;
+    function setDevelopmentFee(uint256 buy, uint256 sell, uint256 p2p) external onlyOwner {
+        _developmentFee[0] = buy;
+        _developmentFee[1] = sell;
+        _developmentFee[2] = p2p;
     }
 
     function setMarketingFee(uint256 buy, uint256 sell, uint256 p2p) external onlyOwner {
@@ -1199,12 +1110,18 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
         _liqFee[2] = p2p;
     }
 
+    function setMiniFlokiLiquidityFee(uint256 buy, uint256 sell, uint256 p2p) external onlyOwner {
+        _miniFlokiLiqFee[0] = buy;
+        _miniFlokiLiqFee[1] = sell;
+        _miniFlokiLiqFee[2] = p2p;
+    }
+
     function setMarketingWallet(address wallet) external onlyOwner {
         marketingWallet = wallet;
     }
 
-    function setCharityWallet(address wallet)  external onlyOwner {
-        charityWallet = wallet;
+    function setDevelopmentWallet(address wallet)  external onlyOwner {
+        developmentWallet = wallet;
     }
 
     function setMaxTxAmount(uint256 amount) external onlyOwner {
@@ -1213,10 +1130,6 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
 
     function setMinTokensBeforeSwap(uint256 amount) external onlyOwner {
         minTokensBeforeSwap = amount;
-    }
-
-    function setRewardCycleInterval(uint256 interval) external onlyOwner {
-        rewardCycleInterval = interval;
     }
 
     function setAntiBotEnabled(bool _enable) external onlyOwner {
@@ -1228,8 +1141,8 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
         if(withInitialize) pinkAntiBot.setTokenOwner(owner());
     }
 
-    function setRewardToken(address token) external onlyOwner {
-        rewardToken = token;
+    function setMiniFlokiAda(address _minifloki) external onlyOwner  {
+        miniFloki = _minifloki;
     }
 
     receive() external payable {}

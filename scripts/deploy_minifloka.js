@@ -37,26 +37,26 @@ async function main() {
     const [deployer] = await ethers.getSigners()
     // owner = deployer.address;
 
-    // const router = ROUTERS.PANCAKE;
-    // const rewardInterval = 86400;
+    const router = ROUTERS.PANCAKE;
+    const rewardInterval = 86400;
 
-    // const tokenContract = await ethers.getContractFactory('MiniFlokiAda')
-    // const token = await tokenContract.deploy(rewardToken.address, ZERO_ADDRESS, router, rewardInterval, owner, marketing, charity, pinkAntiBot)
-    // console.log('Token: ', token.address)
+    const tokenContract = await ethers.getContractFactory('MiniFlokiAda')
+    const token = await tokenContract.deploy(rewardToken.address, ZERO_ADDRESS, router, rewardInterval, owner, marketing, charity, pinkAntiBot)
+    console.log('Token: ', token.address)
 
     const rewardClaimContract = await ethers.getContractFactory('TopHolderRewardClaim')
     const rewardClam = await rewardClaimContract.deploy(rewardToken.address)
     console.log('Reward Claim: ', rewardClam.address)
 
-    await rewardClam.grandRewardSignerRole('0xb8d683Af99a82B0f52f72EB765eB81529C5B35cf')
+    // await rewardClam.grandRewardSignerRole('0xb8d683Af99a82B0f52f72EB765eB81529C5B35cf')
     // await token.setTopHolderRewardDistributor(rewardClam.address)
 
     await sleep(10)
 
-    // await hre.run('verify:verify', {
-    //     address: token.address,
-    //     constructorArguments: [rewardToken.address, ZERO_ADDRESS, router, rewardInterval, owner, marketing, charity, pinkAntiBot],
-    // })
+    await hre.run('verify:verify', {
+        address: token.address,
+        constructorArguments: [rewardToken.address, ZERO_ADDRESS, router, rewardInterval, owner, marketing, charity, pinkAntiBot],
+    })
     await hre.run('verify:verify', {
         address: rewardClam.address,
         constructorArguments: [rewardToken.address],

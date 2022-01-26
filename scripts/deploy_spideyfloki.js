@@ -25,28 +25,33 @@ const sleep = async (s) => {
 }
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
-
-const owner = '0xc7Ef2b32351aaB9466F93c48d0D1D68130B64cc9';
-const marketing = '0x3f7c59A940A761fE8670dE1721B815968E256110';
-const development = '0xBBeAe0597155f1117206Ad22309D14768740fdD3';
-const pinkAntiBot = '0x8EFDb3b642eb2a20607ffe0A56CFefF6a95Df002';
-const minifloki = '0x48CbC7f87C657fEA3B297F658a5133a5deeF9b04'
+let owner = '0x40b64b0cfc332495Dcc65659BF0Dd405c565abf0';
+let marketing = '0x07D73E9d19F808e8054aAF80235B34e99BaFb1dA';
+let charity = '0x0C4cCF7EaD4418cF027ed28CD6db997DaA3aE3a3';
+let prize = "0x4BD3C434e2F7835021a28961d4b044C34FCe3C1d";
+let rewardToken = '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56'
 
 async function main() {
     //Deploy contracts
     const [deployer] = await ethers.getSigners()
+    // owner = deployer.address;
 
-    const router = ROUTERS.UNISWAP;
+    const router = ROUTERS.PANCAKE;
 
-    // const tokenContract = await ethers.getContractFactory('MiniSportZilla')
-    // const token = await tokenContract.deploy(router, owner, marketing, development)
+    // const tokenContract = await ethers.getContractFactory('SPIDEYFLOKI')
+    // const token = await tokenContract.deploy(router, rewardToken, owner, marketing, charity, prize)
     // console.log('Token: ', token.address)
 
-    // await sleep(20)
+    // await sleep(100)
+
+    // await hre.run('verify:verify', {
+    //     address: token.address,
+    //     constructorArguments: [router, rewardToken, owner, marketing, charity, prize],
+    // })
 
     await hre.run('verify:verify', {
-        address: '0x1fCcc8BA1394504f06B6A7EB419f0BE08777f7B0',
-        constructorArguments: [router, owner, marketing, development],
+        address: '0x618eEEEA01F9Bba8bA901BCB3a1e61C6752aDDac',
+        constructorArguments: [router, rewardToken],
     })
 
 }

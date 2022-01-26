@@ -647,6 +647,37 @@ library TransferHelper {
     }
 }
 
+interface IFeeReceiver {
+    function onFeeReceived(uint256 amount) external payable;
+}
+
+contract FeeReceiver is IFeeReceiver, Ownable {
+    address public vault;
+    constructor(address _owner, address _vault) public {
+        vault = _vault;
+        transferOwnership(_owner);
+    }
+
+    receive() external payable {}
+
+    function onFeeReceived(uint256 amount) override external payable {
+        if(vault != address(0))
+            payable(vault).transfer(amount);
+    }
+    
+    function setVault(address _vault) external onlyOwner {
+        vault = _vault;
+    }
+
+    function withdrawAccidentallySentTokens(IERC20 token, address recipient, uint256 amount) external onlyOwner {
+        token.transfer(recipient, amount);
+    }
+
+    function withdrawAccidentallySentEth(address payable recipient, uint256 amount) external onlyOwner {
+        recipient.transfer(amount);
+    }
+}
+
 contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
     using SafeMath for uint256;
     using Address for address;  
@@ -655,7 +686,7 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
     address DEAD = 0x000000000000000000000000000000000000dEaD;
 
     string private _name = 'CryptoRunner';
-    string private _symbol = 'CTR';
+    string private _symbol = 'RUN';
     uint8 private _decimals = 9;
 
     mapping(address => uint256) internal _reflectionBalance;
@@ -663,6 +694,8 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
     mapping(address => mapping(address => uint256)) internal _allowances;
 
     uint256 private constant MAX = ~uint256(0);
+    uint256 private constant MIN_TX_AMOUNT = 100_000e9;
+    uint256 private constant MAX_FEE = 1500;
     uint256 internal _tokenTotal = 1_000_000_000_000e9;
     uint256 internal _reflectionTotal = (MAX - (MAX % _tokenTotal));
 
@@ -688,9 +721,10 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
 
     uint256 public maxTxAmount = _tokenTotal.mul(5).div(1000); // 0.5%
     uint256 public minTokensBeforeSwap = 1_000_000e9;
+    uint256 public maxSwapPercent = 100; // 1%
 
     address public marketingWallet;
-    address public vault;
+    IFeeReceiver public feeReceiver;
 
     IUniswapV2Router02 public router;
     address public pair;
@@ -710,10 +744,11 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
         pair = IUniswapV2Factory(_uniswapV2Router.factory()).createPair(address(this), _uniswapV2Router.WETH());
         router = _uniswapV2Router;
         marketingWallet = _marketingWallet;
-        vault = _vault;
+        feeReceiver = new FeeReceiver(_owner, _vault);
 
         isTaxless[_owner] = true;
-        isTaxless[_vault] = true;
+        isTaxless[address(_vault)] = true;
+        isTaxless[address(feeReceiver)] = true;
         isTaxless[_marketingWallet] = true;
         isTaxless[address(this)] = true;
 
@@ -721,6 +756,7 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
         excludeAccount(address(this));
         excludeAccount(address(_marketingWallet));
         excludeAccount(address(_vault));
+        excludeAccount(address(feeReceiver));
         excludeAccount(address(address(0)));
         excludeAccount(address(address(0x000000000000000000000000000000000000dEaD)));
 
@@ -735,13 +771,15 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
         _liqFee.push(100);
         _liqFee.push(0);
 
-        _vaultFee.push(200);
+        _vaultFee.push(400);
         _vaultFee.push(600);
         _vaultFee.push(0);
 
-        _marketingFee.push(100);
-        _marketingFee.push(100);
+        _marketingFee.push(200);
+        _marketingFee.push(300);
         _marketingFee.push(0);
+
+        _approve(address(this), address(router), uint256(-1));
 
         transferOwnership(_owner);
     }
@@ -814,18 +852,18 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
         return _isExcluded[account];
     }
 
-    function reflectionFromToken(uint256 tokenAmount) public view returns (uint256) {
+    function reflectionFromToken(uint256 tokenAmount) private view returns (uint256) {
         require(tokenAmount <= _tokenTotal, 'Amount must be less than supply');
         return tokenAmount.mul(_getReflectionRate());
     }
 
-    function tokenFromReflection(uint256 reflectionAmount) public view returns (uint256) {
+    function tokenFromReflection(uint256 reflectionAmount) private view returns (uint256) {
         require(reflectionAmount <= _reflectionTotal, 'Amount must be less than total reflections');
         uint256 currentRate = _getReflectionRate();
         return reflectionAmount.div(currentRate);
     }
 
-    function excludeAccount(address account) public onlyOwner {
+    function excludeAccount(address account) private onlyOwner {
         require(account != address(router), 'ERC20: We can not exclude Uniswap router.');
         require(!_isExcluded[account], 'ERC20: Account is already excluded');
         if (_reflectionBalance[account] > 0) {
@@ -945,11 +983,20 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
     }
 
     function swap() private lockTheSwap {
-        uint256 totalFee = _liqFeeCollected.add(_vaultFeeCollected);
+        uint256 maxSwapAmount = balanceOf(pair).mul(maxSwapPercent).div(10**(_feeDecimal + 2));
+        uint256 liqFee = _liqFeeCollected;
+        uint256 vaultFee = _vaultFeeCollected;
+        // if we have more total tokens than maxSwapAmount, 
+        // split the maxSwapAmount amoung both fees
+        if(_liqFeeCollected.add(_vaultFeeCollected) > maxSwapAmount) {
+            liqFee = maxSwapAmount.div(2) > _liqFeeCollected ? _liqFeeCollected : maxSwapAmount.div(2);
+            vaultFee = maxSwapAmount.sub(liqFee) > _vaultFeeCollected ? _vaultFeeCollected : maxSwapAmount.sub(liqFee);
+        }
+        uint256 totalFee = liqFee.add(vaultFee);
 
         if(minTokensBeforeSwap > totalFee) return;
 
-        uint256 amountToLiquify = totalFee.mul(_liqFeeCollected).div(totalFee).div(2);
+        uint256 amountToLiquify = liqFee.div(2);
         uint256 amountToSwap = totalFee.sub(amountToLiquify);
 
         address[] memory sellPath = new address[](2);
@@ -957,37 +1004,41 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
         sellPath[1] = router.WETH();       
 
         uint256 balanceBefore = address(this).balance;
+        uint256 amountBNBLiquidity;
 
-        _approve(address(this), address(router), totalFee);
-        router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+        try router.swapExactTokensForETHSupportingFeeOnTransferTokens(
             amountToSwap,
             0,
             sellPath,
             address(this),
             block.timestamp
-        );
-        uint256 amountBNB = address(this).balance.sub(balanceBefore);
+        ) {
+            uint256 amountBNB = address(this).balance.sub(balanceBefore);
 
-        uint256 totalBNBFee = totalFee.sub(_liqFeeCollected.div(2));
-        uint256 amountBNBLiquidity = amountBNB.mul(_liqFeeCollected).div(totalBNBFee).div(2);
-        uint256 amountBNBVault = amountBNB.sub(amountBNBLiquidity);
+            amountBNBLiquidity = amountBNB.mul(amountToLiquify).div(amountToSwap);
+            uint256 amountBNBVault = amountBNB.sub(amountBNBLiquidity);
 
-        if(amountBNBVault > 0) payable(vault).transfer(amountBNBVault);
+            if(amountBNBVault > 0) {
+                try feeReceiver.onFeeReceived{value: amountBNBVault}(amountBNBVault) {} catch {}
+            }
+            _vaultFeeCollected -= vaultFee;
+        } catch {}
 
         if(amountToLiquify > 0) {
-            router.addLiquidityETH{value: amountBNBLiquidity}(
+            uint256 contractBalance = balanceOf(address(this));
+            try router.addLiquidityETH{value: amountBNBLiquidity}(
                 address(this),
                 amountToLiquify,
                 0,
                 0,
                 DEAD,
                 block.timestamp
-            );
-            emit AutoLiquify(amountBNBLiquidity, amountToLiquify);
+            ) {
+                emit AutoLiquify(amountBNBLiquidity, amountToLiquify);
+                _liqFeeCollected -= contractBalance.sub(balanceOf(address(this)));
+            }
+            catch {}
         }
-        
-        _liqFeeCollected = 0;
-        _vaultFeeCollected = 0;
     }
 
     function _getReflectionRate() private view returns (uint256) {
@@ -1003,11 +1054,6 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
         return reflectionSupply.div(tokenSupply);
     }
 
-    function setPairRouterRewardToken(address _pair, IUniswapV2Router02 _router) external onlyOwner {
-        pair = _pair;
-        router = _router;
-    }
-
     function setTaxless(address account, bool value) external onlyOwner {
         isTaxless[account] = value;
     }
@@ -1021,16 +1067,24 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
         isFeeActive = value;
     }
 
+    function validateFee() view internal {
+        require(_taxFee[0] + _vaultFee[0] + _marketingFee[0] + _liqFee[0] <= MAX_FEE, "Buy Fee too high");
+        require(_taxFee[1] + _vaultFee[1] + _marketingFee[1] + _liqFee[1] <= MAX_FEE, "Sell Fee too high");
+        require(_taxFee[2] + _vaultFee[2] + _marketingFee[2] + _liqFee[2] <= MAX_FEE, "P2P Fee too high");
+    }
+
     function setTaxFee(uint256 buy, uint256 sell, uint256 p2p) external onlyOwner {
         _taxFee[0] = buy;
         _taxFee[1] = sell;
         _taxFee[2] = p2p;
+        validateFee();
     }
 
     function setBNBVaultFee(uint256 buy, uint256 sell, uint256 p2p) external onlyOwner {
         _vaultFee[0] = buy;
         _vaultFee[1] = sell;
         _vaultFee[2] = p2p;
+        validateFee();
     }
 
 
@@ -1038,33 +1092,45 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
         _marketingFee[0] = buy;
         _marketingFee[1] = sell;
         _marketingFee[2] = p2p;
+        validateFee();
     }
 
     function setLiquidityFee(uint256 buy, uint256 sell, uint256 p2p) external onlyOwner {
         _liqFee[0] = buy;
         _liqFee[1] = sell;
         _liqFee[2] = p2p;
+        validateFee();
     }
 
     function setMarketingWallet(address wallet) external onlyOwner {
         marketingWallet = wallet;
     }
 
-    function setBNBVault(address _vault)  external onlyOwner {
-        vault = _vault;
+    function setVaultFeeReceiver(IFeeReceiver _feeReceiver)  external onlyOwner {
+        require(address(_feeReceiver) != address(0));
+        feeReceiver = _feeReceiver;
     }
 
-    function setMaxTxAmount(uint256 amount) external onlyOwner {
-        maxTxAmount = amount;
+    function setMaxTxAmountPercent(uint256 percentDecimals, uint256 percent) external onlyOwner {
+        maxTxAmount = _tokenTotal.mul(percent).div(percentDecimals);
+        require(maxTxAmount >= MIN_TX_AMOUNT, "MaxTx amount is too low");
     }
 
     function setMinTokensBeforeSwap(uint256 amount) external onlyOwner {
         minTokensBeforeSwap = amount;
     }
 
-    function withdrawAccidentallySentTokens(IERC20 token, address recipient, uint256 amount) external onlyOwner {
+    function setMaxSwapPercent(uint256 percent) external onlyOwner {
+        maxSwapPercent = percent;
+    }
+
+    function withdrawAccidentallyStuckTokens(IERC20 token, address recipient, uint256 amount) external onlyOwner {
         require(address(token) != address(this), "Token not allowed!");
         token.transfer(recipient, amount);
+    }
+
+    function withdrawAccidentallyStuckEth(address payable recipient, uint256 amount) external onlyOwner {
+        recipient.transfer(amount);
     }
 
     receive() external payable {}

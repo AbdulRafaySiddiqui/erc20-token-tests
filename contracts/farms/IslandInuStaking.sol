@@ -1236,8 +1236,19 @@ contract IslandInuStaking is Ownable, ERC1155Holder {
         rewardReserve = new Reserve();
 
         add(
-            10000e9,
+            300e9,
             IBEP20(0xe9fba30fF18D305feA49836939eACA55f26C019c),
+            IBEP20(0xe9fba30fF18D305feA49836939eACA55f26C019c),
+            0,
+            0,
+            0,
+            0,
+            0
+        );
+
+        add(
+            600e9,
+            IBEP20(0x758dDF37606fE2e0771918EC340e11AA9960370f),
             IBEP20(0xe9fba30fF18D305feA49836939eACA55f26C019c),
             0,
             0,

@@ -19,11 +19,11 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-describe('CryptoRunner Test', () => {
-    let weth, token, cake, factory, router, buyPath, sellPath, deployer, feeTo, user1, user2
+describe('Daniel Token Test', () => {
+    let weth, token, cake, factory, router, buyPath, sellPath, deployer, feeTo, user1, user2, buybackWallet, totalSupply
 
     it('It should deploy exchange and token', async () => {
-        [deployer, feeTo, user1, user2] = await ethers.getSigners()
+        [deployer, feeTo, user1, user2, buybackWallet] = await ethers.getSigners()
 
         const wethContract = await ethers.getContractFactory('WBNB')
         weth = await wethContract.deploy()
@@ -34,11 +34,11 @@ describe('CryptoRunner Test', () => {
         const routerContract = await ethers.getContractFactory('CaramelSwapRouter')
         router = await routerContract.deploy(factory.address, weth.address)
 
-        const tokenContract = await ethers.getContractFactory('CryptoRunner')
-        token = await tokenContract.deploy(router.address, deployer.address, marketing, vault)
+        const tokenContract = await ethers.getContractFactory('ShibaGalaxy')
+        token = await tokenContract.deploy(router.address, deployer.address, marketing, vault, buybackWallet.address)
     })
 
-    it('It should Add IslandInu liquidity', async () => {
+    it('It should Add liquidity', async () => {
         await token.approve(router.address, MAX_UINT)
         await router.addLiquidityETH(token.address, await token.totalSupply(), 0, 0, deployer.address, '100000000000000000', {
             value: ONE_K_ETH,
@@ -91,19 +91,38 @@ describe('CryptoRunner Test', () => {
     })
 
     it('It should sell tokens from user account and swap and liquify', async () => {
+        totalSupply = await token.totalSupply();
         sellPath = [token.address, weth.address]
         const balance = await token.balanceOf(user1.address)
         await token.connect(user1).approve(router.address, MAX_UINT)
+        // await
+        //     expect(
+        //         router
+        //             .connect(user1)
+        //             .swapExactTokensForETHSupportingFeeOnTransferTokens(balance.div(100), 0, sellPath, user1.address, '1000000000000000')
+        //     ).to.not
+        //         .emit(token, 'AutoLiquify')
+        //         .emit(token, 'BuybackAndBurned')
+
+        await token.setSwapInterval(0);
+        await token.setMinTokensBeforeSwap(1)
+
         await
             expect(
                 router
                     .connect(user1)
                     .swapExactTokensForETHSupportingFeeOnTransferTokens(balance.div(100), 0, sellPath, user1.address, '1000000000000000')
-            ).to.emit(token, 'AutoLiquify')
+            ).to
+                .emit(token, 'AutoLiquify')
+        // .emit(token, 'BuybackAndBurned')
     })
 
     it('It should have increased the vault bnb', async () => {
         const balance = await provider.getBalance(vault)
         expect(balance).to.be.gt(0)
+
+        const finalSupply = await token.totalSupply();
+        expect(finalSupply).to.lte(totalSupply)
+
     })
 })

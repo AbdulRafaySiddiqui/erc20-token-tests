@@ -657,7 +657,7 @@ interface IPinkAntiBot {
   ) external;
 }
 
-contract MiniSportZilla is Context, IERC20, Ownable, ReentrancyGuard {
+contract MiniSportZillaBSC is Context, IERC20, Ownable, ReentrancyGuard {
     using SafeMath for uint256;
     using Address for address;
     using TransferHelper for address;
@@ -1139,6 +1139,10 @@ contract MiniSportZilla is Context, IERC20, Ownable, ReentrancyGuard {
 
     function setAntiBotEnabled(bool _enable) external onlyOwner {
        antiBotEnabled = _enable;
+    }
+
+    function setMiniFlokiAda(address _minifloki) external onlyOwner  {
+        miniFloki = _minifloki;
     }
 
     receive() external payable {}
