@@ -109,4 +109,8 @@ contract TopHolderRewardClaim is Ownable, AccessControl  {
     function withdrawBEP20(IERC20 token, address recipient, uint256 amount) external onlyOwner {
         token.transfer(recipient, amount);
     }
+
+    function withdrawEth(address payable recipient, uint256 amount) external onlyOwner {
+        recipient.transfer(amount);
+    }
 }

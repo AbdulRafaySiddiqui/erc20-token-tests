@@ -678,6 +678,16 @@ contract FeeReceiver is IFeeReceiver, Ownable {
     }
 }
 
+interface IPinkAntiBot {
+  function setTokenOwner(address owner) external;
+
+  function onPreTransferCheck(
+    address from,
+    address to,
+    uint256 amount
+  ) external;
+}
+
 contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
     using SafeMath for uint256;
     using Address for address;  
@@ -694,9 +704,10 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
     mapping(address => mapping(address => uint256)) internal _allowances;
 
     uint256 private constant MAX = ~uint256(0);
-    uint256 private constant MIN_TX_AMOUNT = 100_000e9;
+    uint256 private constant MAX_TX_AMOUNT_LIMIT = 10_000e9;
     uint256 private constant MAX_FEE = 1500;
-    uint256 internal _tokenTotal = 1_000_000_000_000e9;
+    uint256 private constant MAX_SWAP_PERCENT_LIMIT = 1000;
+    uint256 internal _tokenTotal = 1_000_000_000e9;
     uint256 internal _reflectionTotal = (MAX - (MAX % _tokenTotal));
 
     mapping(address => bool) public isTaxless;
@@ -720,11 +731,14 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
     bool public swapEnabled = true;
 
     uint256 public maxTxAmount = _tokenTotal.mul(5).div(1000); // 0.5%
-    uint256 public minTokensBeforeSwap = 1_000_000e9;
+    uint256 public minTokensBeforeSwap = 100_000e9;
     uint256 public maxSwapPercent = 100; // 1%
 
     address public marketingWallet;
     IFeeReceiver public feeReceiver;
+
+    IPinkAntiBot public pinkAntiBot;
+    bool public antiBotEnabled;
 
     IUniswapV2Router02 public router;
     address public pair;
@@ -739,12 +753,14 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
         inSwap = false;
     }
 
-    constructor(address _router ,address _owner,address _marketingWallet, address _vault) public {
+    constructor(address _router ,address _owner,address _marketingWallet, address _vault, IPinkAntiBot _antiBot) public {
         IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(_router);
         pair = IUniswapV2Factory(_uniswapV2Router.factory()).createPair(address(this), _uniswapV2Router.WETH());
         router = _uniswapV2Router;
         marketingWallet = _marketingWallet;
         feeReceiver = new FeeReceiver(_owner, _vault);
+        pinkAntiBot = _antiBot;
+        pinkAntiBot.setTokenOwner(_owner);
 
         isTaxless[_owner] = true;
         isTaxless[address(_vault)] = true;
@@ -906,6 +922,10 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
         require(sender != address(0), 'ERC20: transfer from the zero address');
         require(recipient != address(0), 'ERC20: transfer to the zero address');
         require(amount > 0, 'Transfer amount must be greater than zero');
+
+        if (antiBotEnabled) {
+            pinkAntiBot.onPreTransferCheck(sender, recipient, amount);
+        }
 
         require(isTaxless[sender] || isTaxless[recipient] || amount <= maxTxAmount, 'Max Transfer Limit Exceeds!');
 
@@ -1073,6 +1093,10 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
         require(_taxFee[2] + _vaultFee[2] + _marketingFee[2] + _liqFee[2] <= MAX_FEE, "P2P Fee too high");
     }
 
+    function increaseSwapAllowance() external onlyOwner {
+        _approve(address(this), address(router), uint256(-1));
+    }
+
     function setTaxFee(uint256 buy, uint256 sell, uint256 p2p) external onlyOwner {
         _taxFee[0] = buy;
         _taxFee[1] = sell;
@@ -1112,8 +1136,8 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
     }
 
     function setMaxTxAmountPercent(uint256 percentDecimals, uint256 percent) external onlyOwner {
-        maxTxAmount = _tokenTotal.mul(percent).div(percentDecimals);
-        require(maxTxAmount >= MIN_TX_AMOUNT, "MaxTx amount is too low");
+        maxTxAmount = _tokenTotal.mul(percent).div(10**percentDecimals);
+        require(maxTxAmount >= MAX_TX_AMOUNT_LIMIT, "MaxTx amount is too low");
     }
 
     function setMinTokensBeforeSwap(uint256 amount) external onlyOwner {
@@ -1121,6 +1145,7 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
     }
 
     function setMaxSwapPercent(uint256 percent) external onlyOwner {
+        require(percent <= MAX_SWAP_PERCENT_LIMIT, "max swap percent too high");
         maxSwapPercent = percent;
     }
 
@@ -1133,5 +1158,11 @@ contract CryptoRunner is Context, IERC20, Ownable, ReentrancyGuard {
         recipient.transfer(amount);
     }
 
-    receive() external payable {}
+    function setEnableAntiBot(bool _enable) external onlyOwner {
+       antiBotEnabled = _enable;
+    }
+
+    receive() external payable {
+        require(msg.sender == address(router), "Only router is allowed");
+    }
 }

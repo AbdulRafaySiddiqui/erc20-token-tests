@@ -662,13 +662,13 @@ interface ITopHolderRewardDistributor {
     function onTransfer(address sender, address recipient, uint256 amount) external;
 }
 
-contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
+contract FlokiRush is Context, IERC20, Ownable, ReentrancyGuard {
     using SafeMath for uint256;
     using Address for address;
     using TransferHelper for address;
 
-    string private _name = 'MiniFlokiADA';
-    string private _symbol = 'MFLOKIADA';
+    string private _name = 'MetaFlokiRush';
+    string private _symbol = 'METAFLOKIR';
     uint8 private _decimals = 9;
 
     mapping(address => uint256) internal _reflectionBalance;
@@ -734,7 +734,7 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
         inSwap = false;
     }
 
-    constructor(address _rewardToken, ITopHolderRewardDistributor _topHolderRewarDistributor, address _router,uint interval,address _owner,address _marketingWallet, address _developmentWallet) public {
+    constructor(ITopHolderRewardDistributor _topHolderRewarDistributor, IPinkAntiBot _antibot, address _rewardToken, address _router, uint interval, address _owner, address _marketingWallet, address _developmentWallet) public {
         rewardCycleInterval = interval;
         IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(_router);
         pair = IUniswapV2Factory(_uniswapV2Router.factory()).createPair(address(this), _uniswapV2Router.WETH());
@@ -743,6 +743,9 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
         marketingWallet = _marketingWallet;
         developmentWallet = _developmentWallet;
         topHolderRewarDistributor = _topHolderRewarDistributor;
+        pinkAntiBot = _antibot;
+
+        if(address(_antibot) != address(0)) pinkAntiBot.setTokenOwner(_owner);
 
         isTaxless[_owner] = true;
         isTaxless[developmentWallet] = true;
@@ -1024,12 +1027,12 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
         
         uint256 amountBNBLiquidity = amountBNB.mul(_liqFeeCollected).div(totalBNBFee).div(2);
         uint256 amountBNBMarketing = amountBNB.mul(_marketingFeeCollected).div(totalBNBFee);
-        uint256 amountBNBCharity = amountBNB.mul(_developmentFeeCollected).div(totalBNBFee);
+        uint256 amountBNBDev = amountBNB.mul(_developmentFeeCollected).div(totalBNBFee);
         uint256 amountBNBReward = amountBNB.mul(_rewardFeeCollected).div(totalBNBFee);
         uint256 amountBNBTopHolder = amountBNB.mul(_topHolderFeeCollected).div(totalBNBFee);
 
         if(amountBNBMarketing > 0) payable(marketingWallet).transfer(amountBNBMarketing);
-        if(amountBNBCharity > 0) payable(developmentWallet).transfer(amountBNBCharity);
+        if(amountBNBDev > 0) payable(developmentWallet).transfer(amountBNBDev);
 
         if(amountToLiquify > 0) {
             router.addLiquidityETH{value: amountBNBLiquidity}(
@@ -1182,7 +1185,7 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
         _topHolderFee[2] = p2p;
     }
 
-    function setChairtyFee(uint256 buy, uint256 sell, uint256 p2p) external onlyOwner {
+    function setDevelopmentFee(uint256 buy, uint256 sell, uint256 p2p) external onlyOwner {
         _developmentFee[0] = buy;
         _developmentFee[1] = sell;
         _developmentFee[2] = p2p;
@@ -1204,7 +1207,7 @@ contract MiniFlokiAda is Context, IERC20, Ownable, ReentrancyGuard {
         marketingWallet = wallet;
     }
 
-    function setCharityWallet(address wallet)  external onlyOwner {
+    function setDevelopmentWallet(address wallet)  external onlyOwner {
         developmentWallet = wallet;
     }
 

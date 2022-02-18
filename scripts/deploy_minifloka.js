@@ -26,40 +26,48 @@ const sleep = async (s) => {
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 
-let owner = '0xAceF70308b4d7b6F79fAE717C308aCcf7bF39455';
-let marketing = '0x35A31911211Fa4805B5602B2Ed06154686d45FC7';
-let charity = '0x2A1a09a5695071dec39ADBe099aDA7d0e7F2f4e6';
-const rewardToken = { address: '0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47' }
+let owner = '0x0d9E211e282A0594728059A7eEEdeDa2796a599c';
+let marketing = '0x1271d176c798B8F7b6B5BA659dFe6eB232D7ADE8';
+let development = '0x0aC05e00F417161E47fB0052826BB2036CA5b37c';
+const rewardToken = { address: '0xbA2aE424d960c26247Dd6c32edC70B295c744C43' }
 const pinkAntiBot = '0x8EFDb3b642eb2a20607ffe0A56CFefF6a95Df002';
 
 async function main() {
     //Deploy contracts
     const [deployer] = await ethers.getSigners()
-    // owner = deployer.address;
+    owner = deployer.address;
 
-    const router = ROUTERS.PANCAKE;
+    const router = ROUTERS.UNISWAP;
     const rewardInterval = 86400;
 
-    const tokenContract = await ethers.getContractFactory('MiniFlokiAda')
-    const token = await tokenContract.deploy(rewardToken.address, ZERO_ADDRESS, router, rewardInterval, owner, marketing, charity, pinkAntiBot)
+    const tokenContract = await ethers.getContractFactory('FlokiRush')
+    const token = await tokenContract.deploy(ZERO_ADDRESS, ZERO_ADDRESS, rewardToken.address, router, rewardInterval, owner, marketing, development)
     console.log('Token: ', token.address)
 
     const rewardClaimContract = await ethers.getContractFactory('TopHolderRewardClaim')
-    const rewardClam = await rewardClaimContract.deploy(rewardToken.address)
+    const rewardClam = await rewardClaimContract.deploy(token.address)//reward token
     console.log('Reward Claim: ', rewardClam.address)
 
-    // await rewardClam.grandRewardSignerRole('0xb8d683Af99a82B0f52f72EB765eB81529C5B35cf')
-    // await token.setTopHolderRewardDistributor(rewardClam.address)
+    console.log('adding signer')
+    await (await rewardClam.grandRewardSignerRole('0x11656d0e67B6ba0818089B41Fd2a4d18df0522df')).wait()
+    console.log('set reawrd distributor')
+    await (await token.setTopHolderRewardDistributor(rewardClam.address)).wait()
 
-    await sleep(10)
+    console.log('minting tokens')
+    await (await token.approve(rewardClam.address, ethers.constants.MaxUint256)).wait()
+    console.log('deposit rewards')
+    await (await rewardClam.depositReward(await token.balanceOf(deployer.address))).wait()
+
+    await sleep(100)
 
     await hre.run('verify:verify', {
+        contract: "contracts/tokens/FlokiRush/FlokiRush.sol:FlokiRush",
         address: token.address,
-        constructorArguments: [rewardToken.address, ZERO_ADDRESS, router, rewardInterval, owner, marketing, charity, pinkAntiBot],
+        constructorArguments: [ZERO_ADDRESS, ZERO_ADDRESS, rewardToken.address, router, rewardInterval, owner, marketing, development],
     })
     await hre.run('verify:verify', {
         address: rewardClam.address,
-        constructorArguments: [rewardToken.address],
+        constructorArguments: [token.address],
     })
 
 }

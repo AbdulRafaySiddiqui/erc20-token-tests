@@ -25,10 +25,10 @@ const sleep = async (s) => {
 }
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
-let owner = '0xb35869eCfB96c27493cA281133edd911e479d0D9';
-let marketing = '0xe234Adb58788EE9F02fCA8B5DB6593a26ab4FF47';
-let vault = '0x66E5c73F9c0197b18C0876f2e132b164ebC4BBBb';
-let buyback = "0x2A1a09a5695071dec39ADBe099aDA7d0e7F2f4e6";
+let owner = '0xf1caA131983Cd4343163602E852B5A7cdF68Fb57';
+let marketing = '0x890904D52a9854035d8FdfE912822A0128018d87';
+let vault = '0xAB7b0EFcb7AfB5931c2d37e8b99F611cDFDD2d47';
+let anitbot = '0x8EFDb3b642eb2a20607ffe0A56CFefF6a95Df002';
 
 async function main() {
     //Deploy contracts
@@ -37,22 +37,24 @@ async function main() {
 
     const router = ROUTERS.PANCAKE;
 
-    // const tokenContract = await ethers.getContractFactory('TESTX')
-    // const token = await tokenContract.deploy(router, owner, marketing, vault, buyback)
-    // console.log('Token: ', token.address)
+    const tokenContract = await ethers.getContractFactory('CryptoRunner')
+    const token = await tokenContract.deploy(router, owner, marketing, vault, anitbot)
+    // const token = new ethers.Contract('0x8fC7F5676d14502deBeBDa3b0dC8907CE1b6beAe', tokenContract.interface, deployer)
+    console.log('Token: ', token.address)
 
-    // const feeReceiver = await token.feeReceiver()
-    // await sleep(10)
+    const feeReceiver = await token.feeReceiver()
+    await sleep(100)
 
     await hre.run('verify:verify', {
-        address: '0xA52ec757A737D37E5c8b42f1eACC129D9C81FDbd',
-        constructorArguments: [router, owner, marketing, vault, buyback],
+        address: token.address,
+        constructorArguments: [router, owner, marketing, vault, anitbot],
     })
 
-    // await hre.run('verify:verify', {
-    //     address: feeReceiver.address,
-    //     constructorArguments: [owner, vault],
-    // })
+    await hre.run('verify:verify', {
+        address: feeReceiver,
+        contract: 'contracts/tokens/CryptoRunner/CryptoRunner.sol:FeeReceiver',
+        constructorArguments: [owner, vault],
+    })
 
 }
 

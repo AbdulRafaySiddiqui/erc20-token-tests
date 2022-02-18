@@ -861,6 +861,7 @@ contract GoldenKittyCake is Context, IERC20, Ownable, ReentrancyGuard {
         for (uint256 i = 0; i < _excluded.length; i++) {
             if (_excluded[i] == account) {
                 _excluded[i] = _excluded[_excluded.length - 1];
+                _reflectionBalance[account] = reflectionFromToken(_tokenBalance[account]); //update _reflectionBalance[account]
                 _tokenBalance[account] = 0;
                 _isExcluded[account] = false;
                 _excluded.pop();
